@@ -51,9 +51,11 @@ def run_due(engine, callback: Callable[[Reminder], str | None] = unavailable) ->
 
 
 def main():
+    from app.phone import configured_delivery
     engine = get_engine()
+    delivery = configured_delivery()
     while True:
-        run_due(engine)
+        run_due(engine, delivery)
         time.sleep(1)
 
 

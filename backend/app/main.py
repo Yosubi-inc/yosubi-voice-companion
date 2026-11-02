@@ -188,3 +188,6 @@ app.include_router(tasks_router)
 
 from app.safety import router as safety_router
 app.include_router(safety_router)
+
+from app.phone import router as phone_router
+app.include_router(phone_router)

@@ -39,7 +39,7 @@ $env:PYTHONPATH = "backend"
 python -m app.scheduler
 ```
 
-The API provides `POST /tasks`, `GET /tasks`, `PATCH /tasks/{id}`, `DELETE /tasks/{id}`, `POST /tasks/{id}/complete`, `POST /reminders`, and `GET /reminders/{id}`. Supply a task ID, `kind` (`reminder` or `callback`), and an ISO 8601 `due_at` with a time zone. The reminder response includes its recorded history and bilingual failure reasons. The scheduler persists claims before delivery; an interrupted attempt remains attempted and is not automatically repeated. Its default delivery callback reports failure because no delivery service is configured. Integrations can call `run_due(engine, callback)` with a callback that returns delivery evidence or raises `DeliveryFailure` with English and Spanish reasons. No phone call is made by the default worker.
+The API provides `POST /tasks`, `GET /tasks`, `PATCH /tasks/{id}`, `DELETE /tasks/{id}`, `POST /tasks/{id}/complete`, `POST /reminders`, and `GET /reminders/{id}`. Supply a task ID, `kind` (`reminder` or `callback`), and an ISO 8601 `due_at` with a time zone. The reminder response includes its recorded history and bilingual failure reasons. The scheduler persists claims before delivery; an interrupted attempt remains attempted and is not automatically repeated. The worker uses the test phone provider when configured as described below; otherwise it reports failure. Integrations can call `run_due(engine, callback)` with a callback that returns evidence or raises `DeliveryFailure` with English and Spanish reasons.
 
 ## Safety API
 
@@ -48,3 +48,11 @@ The API provides `POST /tasks`, `GET /tasks`, `PATCH /tasks/{id}`, `DELETE /task
 Trusted contacts and their `receive_escalation` or `save_incident` grants are managed under `/safety/profiles/{profile_id}`. Each change and sensitive action requires current profile consent and explicit action consent; a contact action also requires an active grant. Incident summaries are saved only through the consent-gated endpoint. Payments, purchases, account changes, and protected-information sharing are not supported.
 
 The scaffold has no authentication. Profile IDs and contact IDs are not proof of identity. Keep this API local and add authenticated identity and ownership checks before exposing it to users. Use a fresh development database after schema changes: `create_all` does not update existing tables.
+
+## Telephone test channel
+
+The phone routes use a local demo agent with the same canned replies as the web fake. `POST /phone/inbound?lang=en` or `?lang=es` starts a speech Gather; turns can switch languages, and saying goodbye ends the call. Every phone webhook, including reminder and status callbacks, requires a Twilio signature. Set `PHONE_WEBHOOK_BASE_URL` to the exact externally configured webhook origin (no trailing path); signatures use that origin and the full path and query. Keep the API on loopback; no tunnel is supplied. Do not trust forwarded host headers.
+
+The scheduler makes test calls only when `PHONE_TEST_MODE=1` and `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `PHONE_TEST_DESTINATION`, and `PHONE_WEBHOOK_BASE_URL` are set in the process environment. Use Twilio test credentials and test phone numbers only. Set `PHONE_LANGUAGE=es` for Spanish reminder calls. Otherwise the scheduler reports a bilingual delivery failure. Call acceptance is recorded as request evidence, not proof that a person answered; status callbacks are authenticated but not persisted. A single configured test destination is shared by reminders; there is no user phone directory.
+
+Spanish uses Twilio `Polly.Mia` with `es-US`; English uses `Polly.Joanna` with `en-US`. The tests verify the requested voice and language in TwiML, not audio quality. Verify Spanish pronunciation and intelligibility with an owner-provisioned live number in a later authorized test; no live call was made here.

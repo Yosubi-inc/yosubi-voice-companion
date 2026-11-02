@@ -11,3 +11,4 @@ dist/
 .venv/
 test-results/
 playwright-report/
+*.tsbuildinfo

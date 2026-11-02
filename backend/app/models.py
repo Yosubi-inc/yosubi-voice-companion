@@ -1,4 +1,6 @@
-from sqlalchemy import Integer
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -8,47 +10,73 @@ class Base(DeclarativeBase):
 
 class Profile(Base):
     __tablename__ = "profiles"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class Preference(Base):
     __tablename__ = "preferences"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True)
+    preferred_language: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    communication_needs: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Consent(Base):
     __tablename__ = "consents"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True)
+    granted: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
 
 class Task(Base):
     __tablename__ = "tasks"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class Reminder(Base):
     __tablename__ = "reminders"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    due_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    state: Mapped[str] = mapped_column(String(20), nullable=False)
+    evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_reason_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_reason_es: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ActionLog(Base):
     __tablename__ = "action_log"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reminder_id: Mapped[int] = mapped_column(ForeignKey("reminders.id"), nullable=False, index=True)
+    state: Mapped[str] = mapped_column(String(20), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason_es: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class TrustedContact(Base):
     __tablename__ = "trusted_contacts"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
 
 
 class Grant(Base):
     __tablename__ = "grants"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("trusted_contacts.id", ondelete="CASCADE"), nullable=False, index=True)
+    permission: Mapped[str] = mapped_column(String(50), nullable=False)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class Incident(Base):
     __tablename__ = "incidents"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class SpendLedger(Base):

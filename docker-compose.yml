@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: yosubi-voice-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: voice_companion
+      POSTGRES_PASSWORD: voice_companion_dev
+      POSTGRES_DB: voice_companion
+    ports:
+      - "127.0.0.1:55434:5432"
+    volumes:
+      - yosubi-voice-pgdata:/var/lib/postgresql/data
+
+volumes:
+  yosubi-voice-pgdata:

@@ -4,7 +4,7 @@ Live demo: `https://sparks-epjn.onrender.com`
 All people and records are fictional (seeded persona María Vega).
 Have the demo token ready; never show it on screen.
 Everything spoken and heard runs on Meta: realtime transcription hears,
-Spark converses, Wonder judges scams, and Meta's MMS voice speaks.
+Wonder converses and judges scams, and Meta's MMS voice speaks.
 
 ## Prepare (5 min before)
 
@@ -30,8 +30,8 @@ Spark converses, Wonder judges scams, and Meta's MMS voice speaks.
 3. **2:10–3:20 — Medicare scam flagged live.** Say: "Someone from Medicare
    called demanding payment and my verification code." Show Sparks
    flagging the scam out loud, refusing disclosure, and guiding to
-   independent verification. Mention the hybrid safety: Spark converses,
-   Wonder (`muse-wonder-1.0`) judges every risky turn.
+   independent verification. Mention the hybrid safety: Wonder converses, and a second Wonder
+   judgment checks every risky turn.
 4. **3:20–4:20 — Trusted circle.** "Let my daughter Elena help with this."
    Show the escalation with consent, her narrow grant, and a refused
    action outside it. Show the resolved informational incident.

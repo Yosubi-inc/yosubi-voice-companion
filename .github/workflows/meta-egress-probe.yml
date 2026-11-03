@@ -1,0 +1,9 @@
+name: meta-egress-probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          code=$(curl -s -m 30 -o /dev/null -w "%{http_code}" -X POST "https://api.meta.ai/v1/chat/completions" -H "Authorization: Bearer FAKE_KEY_TEST" -H "Content-Type: application/json" -d '{"model":"muse-spark-1.3","messages":[{"role":"user","content":"hi"}]}')
+          echo "META_STATUS=$code"

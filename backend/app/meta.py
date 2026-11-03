@@ -67,7 +67,8 @@ def chat(messages, *, engine, temperature=0.7, stream=False, client=None, reason
         payload["stream_options"] = {"include_usage": True}
     url = os.getenv("META_BASE_URL", "https://api.meta.ai/v1").rstrip("/") + "/chat/completions"
     own_client = client is None
-    client = client or httpx.Client(timeout=60)
+    # Meta's IPv6 edge does not serve the model API (404); pin outbound to IPv4.
+    client = client or httpx.Client(timeout=60, transport=httpx.HTTPTransport(local_address="0.0.0.0"))
 
     def start():
         try:

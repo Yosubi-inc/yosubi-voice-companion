@@ -154,7 +154,8 @@ def transcribe(data, content_type, language):
     except spend.SpendLimitExceeded:
         raise HTTPException(429, detail=LIMIT) from None
     try:
-        with httpx.Client(timeout=60) as client:
+        # Meta's IPv6 edge does not serve the model API (404); pin outbound to IPv4.
+        with httpx.Client(timeout=60, transport=httpx.HTTPTransport(local_address="0.0.0.0")) as client:
             response = client.post(os.getenv("META_BASE_URL", "https://api.meta.ai/v1").rstrip("/") + "/audio/transcriptions",
                                    headers={"Authorization": f"Bearer {key}"},
                                    data={"model": MODEL, "language": language, "response_format": "verbose_json"},

@@ -20,8 +20,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import CircleActivity, Consent, EscalationRequest, Grant, Incident, Preference, Profile, TrustedContact
-from sqlalchemy import delete, select, text
+from sqlalchemy import case, delete, func, select, text
 from app.database import get_engine
+from app.spend import CAP, ledger
 
 _requests = {}
 _rate_lock = Lock()
@@ -75,7 +76,7 @@ async def observe_and_limit(request: Request, call_next):
 
 
 async def demo_auth(request: Request, call_next):
-    protected = {"profiles", "conversations", "tasks", "reminders", "safety", "guidance", "trust", "chat", "stt"}
+    protected = {"profiles", "conversations", "tasks", "reminders", "safety", "guidance", "trust", "chat", "stt", "spend"}
     token = os.getenv("DEMO_API_TOKEN")
     if token and request.url.path.strip("/").split("/", 1)[0] in protected:
         authorization = request.headers.get("authorization", "")
@@ -157,6 +158,32 @@ def ready():
     except Exception:
         return JSONResponse(status_code=503, content={"detail": {"en": "The service is not ready.", "es": "El servicio no está listo."}})
     return {"status": "ready"}
+
+
+@app.get("/spend/summary")
+def spend_summary():
+    reserved = func.coalesce(func.sum(case(
+        (ledger.c.status == "reserved", ledger.c.reserved_microdollars), else_=0)), 0)
+    settled = func.coalesce(func.sum(case(
+        (ledger.c.status == "settled", ledger.c.cost_microdollars), else_=0)), 0)
+    with get_engine().connect() as connection:
+        rows = connection.execute(select(
+            ledger.c.model, reserved.label("reserved_microdollars"),
+            settled.label("settled_microdollars"),
+        ).group_by(ledger.c.model).order_by(ledger.c.model)).mappings().all()
+        recent = connection.execute(select(
+            ledger.c.model, ledger.c.input_tokens, ledger.c.cached_tokens,
+            ledger.c.output_tokens, ledger.c.cost_microdollars,
+        ).where(ledger.c.status == "settled").order_by(ledger.c.id.desc()).limit(50)).mappings().all()
+    return {
+        "cap_microdollars": CAP,
+        "totals": {
+            "reserved_microdollars": sum(row["reserved_microdollars"] for row in rows),
+            "settled_microdollars": sum(row["settled_microdollars"] for row in rows),
+        },
+        "per_model": [dict(row) for row in rows],
+        "recent_entries": [dict(row) for row in recent],
+    }
 
 
 @app.post("/profiles/{profile_id}/conversations")

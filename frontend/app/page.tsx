@@ -43,6 +43,9 @@ export default function Home() {
     if (recorder.current?.state !== "inactive") recorder.current?.stop();
     stream.current?.getTracks().forEach(track => track.stop());
   }, []);
+  useEffect(() => {
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }, []);
   const onFinal = async (text: string) => {
     if (!text.trim() || stateRef.current.phase === "idle") return;
     const turn = ++generation.current;

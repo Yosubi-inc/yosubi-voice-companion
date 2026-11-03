@@ -2,10 +2,14 @@
 import random
 import time
 
+import httpx
+
 
 def transient(exc: Exception) -> bool:
     status = getattr(exc, "status_code", getattr(exc, "status", None))
-    return isinstance(exc, (TimeoutError, ConnectionError)) or status == 429 or (isinstance(status, int) and 500 <= status < 600)
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+    return isinstance(exc, (TimeoutError, ConnectionError, httpx.TimeoutException, httpx.NetworkError)) or status == 429 or (isinstance(status, int) and 500 <= status < 600)
 
 
 def retry(call, *, attempts=3, base_delay=0.1, retryable=transient, sleep=time.sleep, jitter=random.uniform):

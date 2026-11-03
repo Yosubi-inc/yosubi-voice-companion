@@ -46,6 +46,27 @@ def test_retry_succeeds_and_does_not_retry_permanent_errors():
         retry(lambda: (_ for _ in ()).throw(ValueError()), sleep=lambda _: pytest.fail("retried"))
 
 
+def test_retry_handles_httpx_transient_errors():
+    import httpx
+    request = httpx.Request("GET", "http://127.0.0.1/")
+    for exc in (httpx.ConnectError("offline", request=request),
+                httpx.ReadTimeout("timeout", request=request),
+                httpx.HTTPStatusError("busy", request=request,
+                                      response=httpx.Response(503, request=request))):
+        calls = []
+        def operation():
+            calls.append(1)
+            if len(calls) == 1:
+                raise exc
+            return "ok"
+        assert retry(operation, sleep=lambda _: None) == "ok"
+        assert len(calls) == 2
+    permanent = httpx.HTTPStatusError("bad request", request=request,
+                                      response=httpx.Response(400, request=request))
+    with pytest.raises(httpx.HTTPStatusError):
+        retry(lambda: (_ for _ in ()).throw(permanent), sleep=lambda _: pytest.fail("retried"))
+
+
 def test_rate_limit_and_validation(monkeypatch):
     monkeypatch.setattr(main, "RATE_LIMIT", 2)
     with TestClient(main.app) as client:

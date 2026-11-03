@@ -1,0 +1,28 @@
+:root { color-scheme: light dark; --bg: #f4f7f6; --surface: #fff; --text: #152b2a; --muted: #365452; --accent: #075e55; --accent-text: #fff; --border: #a7bcba; --error: #8b1e20; }
+@media (prefers-color-scheme: dark) { :root { --bg: #101c1c; --surface: #1d3030; --text: #f3fbf9; --muted: #c4dcd8; --accent: #a8eee0; --accent-text: #102925; --border: #6c928c; --error: #ffbdbd; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: Arial, sans-serif; font-size: 1.2rem; line-height: 1.5; }
+.app { max-width: 850px; margin: auto; padding: 2rem 1rem 4rem; }
+header { text-align: center; margin-bottom: 1.5rem; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; margin: .3rem 0; }
+h2 { font-size: 1.6rem; margin: 0 0 1rem; }
+.eyebrow { font-weight: bold; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin: 0; }
+.voice-panel, .conversation { background: var(--surface); border: 1px solid var(--border); border-radius: 1.25rem; padding: clamp(1rem, 4vw, 2rem); margin-bottom: 1rem; }
+.indicators { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; font-weight: bold; }
+.indicators p { margin: 0 0 1rem; }
+.status-dot { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; background: var(--muted); margin-right: .6rem; }
+.status-dot.listening, .status-dot.speaking { background: var(--accent); }
+button, input { font: inherit; }
+button { cursor: pointer; border: 2px solid var(--accent); border-radius: .7rem; background: var(--accent); color: var(--accent-text); font-weight: bold; padding: .7rem 1.2rem; min-height: 52px; }
+button:disabled { opacity: .6; cursor: not-allowed; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+.voice-button { width: 100%; min-height: 112px; font-size: clamp(1.35rem, 4vw, 1.8rem); }
+.demo-note { color: var(--muted); }
+label { display: block; font-weight: bold; margin-bottom: .4rem; }
+.input-row { display: flex; gap: .6rem; }
+input { min-width: 0; width: 100%; padding: .7rem; border: 2px solid var(--border); border-radius: .6rem; background: var(--surface); color: var(--text); }
+.error { color: var(--error); font-weight: bold; }
+.conversation ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .8rem; }
+.conversation li { border-left: 5px solid var(--accent); padding: .5rem 1rem; background: var(--bg); overflow-wrap: anywhere; }
+.conversation li p { margin: .25rem 0 0; }
+@media (max-width: 420px) { .input-row { flex-direction: column; } }

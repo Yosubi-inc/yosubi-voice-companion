@@ -7,7 +7,8 @@ import re
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, StrictBool
+from pydantic import Field, StrictBool, StrictInt
+from app.validation import RequestModel as BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -85,7 +86,7 @@ def assess_request(data: Assessment):
 
 class ConsentAction(BaseModel):
     consent: StrictBool
-    contact_id: int | None = None
+    contact_id: StrictInt | None = None
 
 
 class ContactInput(ConsentAction):

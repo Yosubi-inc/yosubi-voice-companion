@@ -1,14 +1,88 @@
 from uuid import uuid4
+from contextlib import asynccontextmanager
+import hmac
+import logging
+import os
+import json
+import math
+import time
+from collections import deque
+from threading import Lock
 
-from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel, Field, StrictBool, field_validator
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from pydantic import Field, StrictBool, field_validator
+from app.validation import RequestModel as BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import CircleActivity, Consent, EscalationRequest, Grant, Incident, Preference, Profile, TrustedContact
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
+from app.database import get_engine
 
-app = FastAPI(title="Yosubi Voice Companion", debug=False)
+_requests = {}
+_rate_lock = Lock()
+RATE_LIMIT = 120
+RATE_WINDOW = 60
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    with _rate_lock:
+        _requests.clear()
+    if not os.getenv("DEMO_API_TOKEN"):
+        logging.getLogger(__name__).warning("DEMO_API_TOKEN is unset; demo API routes are open.")
+    yield
+
+
+app = FastAPI(title="Yosubi Voice Companion", debug=False, lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"detail": {"en": "Please check your request and try again.", "es": "Revise su solicitud e inténtelo de nuevo."}})
+
+
+@app.middleware("http")
+async def observe_and_limit(request: Request, call_next):
+    request_id = str(uuid4())
+    response = None
+    try:
+        if request.url.path not in ("/health", "/ready"):
+            now = time.monotonic()
+            ip = request.client.host if request.client else "unknown"
+            with _rate_lock:
+                for key in list(_requests):
+                    if not _requests[key] or _requests[key][-1] <= now - RATE_WINDOW:
+                        del _requests[key]
+                hits = _requests.setdefault(ip, deque())
+                while hits and hits[0] <= now - RATE_WINDOW:
+                    hits.popleft()
+                wait = max(1, math.ceil(RATE_WINDOW - (now - hits[0]))) if len(hits) >= RATE_LIMIT else 0
+                if not wait:
+                    hits.append(now)
+            if wait:
+                response = JSONResponse(status_code=429, content={"detail": {"en": "Too many requests. Please try again later.", "es": "Demasiadas solicitudes. Inténtelo más tarde."}}, headers={"Retry-After": str(wait)})
+        if response is None:
+            response = await demo_auth(request, call_next)
+        response.headers["X-Request-ID"] = request_id
+        return response
+    finally:
+        route = request.scope.get("route")
+        logging.getLogger("app.requests").warning(json.dumps({"request_id": request_id, "route": getattr(route, "path", "unmatched"), "outcome": response.status_code if response else 500}))
+
+
+async def demo_auth(request: Request, call_next):
+    protected = {"profiles", "conversations", "tasks", "reminders", "safety", "guidance", "trust"}
+    token = os.getenv("DEMO_API_TOKEN")
+    if token and request.url.path.strip("/").split("/", 1)[0] in protected:
+        authorization = request.headers.get("authorization", "")
+        scheme, separator, credential = authorization.partition(" ")
+        if not separator or scheme.lower() != "bearer" or not hmac.compare_digest(credential.encode(), token.encode()):
+            return JSONResponse(status_code=401, content={"detail": {
+                "en": "Authentication required", "es": "Se requiere autenticación"
+            }}, headers={"WWW-Authenticate": "Bearer"})
+    return await call_next(request)
 
 FIELDS = ("name", "preferred_language", "communication_needs")
 # Drafts are conversation-only and are never written to the database before consent.
@@ -71,6 +145,16 @@ def validate_answer(answer: Answer):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    try:
+        with get_engine().connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception:
+        return JSONResponse(status_code=503, content={"detail": {"en": "The service is not ready.", "es": "El servicio no está listo."}})
+    return {"status": "ready"}
 
 
 @app.post("/profiles/{profile_id}/conversations")
@@ -196,3 +280,6 @@ app.include_router(phone_router)
 
 from app.guidance import router as guidance_router
 app.include_router(guidance_router)
+
+from app.demo import router as demo_router
+app.include_router(demo_router)

@@ -118,3 +118,9 @@ class CommunityResource(Base):
 class AuditRecord(Base):
     __tablename__ = "audit_records"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+
+class DemoSeed(Base):
+    __tablename__ = "demo_seed"
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id"), primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False)

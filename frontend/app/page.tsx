@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import "./styles.css";
 import { transition, type State } from "../lib/conversation";
 import { detectLanguage, FakeAgent, FakeSTT, type ChatMessage, type TranscriptionSession } from "../lib/voice";
 
@@ -9,7 +11,8 @@ export default function Home() {
   const stateRef = useRef(state);
   const [input, setInput] = useState("");
   const [error, setError] = useState(false);
-  const [reply, setReply] = useState("");
+  const [transcript, setTranscript] = useState<{ role: "user" | "assistant" | "confirmation"; text: string }[]>([]);
+  const [micError, setMicError] = useState(false);
   const stt = useRef(new FakeSTT());
   const agent = useRef(new FakeAgent());
   const session = useRef<TranscriptionSession | null>(null);
@@ -39,14 +42,15 @@ export default function Home() {
     const turn = ++generation.current;
     window.speechSynthesis.cancel();
     const language = detectLanguage(text, stateRef.current.language);
-    update(transition(stateRef.current, { type: "transcript", language }));
+    flushSync(() => update(transition(stateRef.current, { type: "transcript", language })));
     messages.current.push({ role: "user", content: text });
+    setTranscript(previous => [...previous, { role: "user", text }]);
     try {
       const result = await agent.current.complete([...messages.current], language);
       if (turn !== generation.current) return;
       const spoken = [result.text, result.actionConfirmation].filter(Boolean).join(" ");
       messages.current.push({ role: "assistant", content: spoken });
-      setReply(spoken);
+      setTranscript(previous => [...previous, { role: "assistant", text: result.text }, ...(result.actionConfirmation ? [{ role: "confirmation" as const, text: result.actionConfirmation }] : [])]);
       const utterance = new SpeechSynthesisUtterance(spoken);
       utterance.lang = result.language === "es" ? "es-ES" : "en-US";
       utterance.onend = utterance.onerror = () => {
@@ -61,6 +65,7 @@ export default function Home() {
   const start = async () => {
     const turn = ++generation.current;
     setError(false);
+    setMicError(false);
     try {
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (turn !== generation.current) { media.getTracks().forEach(track => track.stop()); return; }
@@ -70,20 +75,33 @@ export default function Home() {
       recorder.current.ondataavailable = event => { if (event.data.size) session.current?.pushAudio(event.data); };
       recorder.current.start(250);
       update(transition(stateRef.current, { type: "start" }));
-    } catch { stop(); setError(true); }
+    } catch { stop(); setMicError(true); }
   };
   const es = state.language === "es";
-  return <main>
-    <h1>Yosubi Voice Companion</h1>
-    <p>{es ? "Demostración: el micrófono está activo, pero la transcripción es simulada. Escribe lo que dirías." : "Demo: the microphone is active, but transcription is simulated. Type what you would say."}</p>
-    <button type="button" onClick={() => state.phase === "idle" ? void start() : stop()}>{state.phase === "idle" ? "Start talking / Empezar a hablar" : "Stop talking / Dejar de hablar"}</button>
-    <p role="status">{state.phase === "idle" ? (es ? "Detenido" : "Stopped") : state.phase === "thinking" ? (es ? "Pensando" : "Thinking") : state.phase === "speaking" ? (es ? "Hablando" : "Speaking") : (es ? "Escuchando" : "Listening")}</p>
-    {error && <p role="alert">{es ? "No se pudo usar el micrófono o procesar la respuesta. Inténtalo de nuevo." : "Could not use the microphone or process the reply. Please try again."}</p>}
-    <form onSubmit={event => { event.preventDefault(); stt.current.submit(input); setInput(""); }}>
-      <label htmlFor="transcript">{es ? "Transcripción simulada" : "Fake transcript"}</label>{" "}
-      <input id="transcript" value={input} onChange={event => setInput(event.target.value)} disabled={state.phase === "idle"} />{" "}
-      <button type="submit" disabled={state.phase === "idle" || !input.trim()}>{es ? "Enviar" : "Send"}</button>
-    </form>
-    {reply && <p>{reply}</p>}
+  const status = state.phase === "idle" ? (es ? "Detenido" : "Stopped") : state.phase === "thinking" ? (es ? "Pensando" : "Thinking") : state.phase === "speaking" ? (es ? "Hablando" : "Speaking") : (es ? "Escuchando" : "Listening");
+  return <main className="app">
+    <header>
+      <p className="eyebrow">Yosubi</p>
+      <h1>{es ? "Tu compañero de voz" : "Your voice companion"}</h1>
+      <p>{es ? "Una conversación sencilla, a tu ritmo." : "A simple conversation, at your pace."}</p>
+    </header>
+    <section className="voice-panel" aria-label={es ? "Controles de voz" : "Voice controls"}>
+      <div className="indicators">
+        <p role="status"><span className={`status-dot ${state.phase}`} aria-hidden="true" />{status}</p>
+        <p aria-label={es ? "Idioma" : "Language"}>{es ? "Idioma: ES" : "Language: EN"}</p>
+      </div>
+      <button className="voice-button" type="button" onClick={() => state.phase === "idle" ? void start() : stop()}>{state.phase === "idle" ? "Start talking / Empezar a hablar" : "Stop talking / Dejar de hablar"}</button>
+      {micError && <div className="error" role="alert"><p>{es ? "No se pudo usar el micrófono. Comprueba el permiso e inténtalo de nuevo." : "Could not use the microphone. Check its permission and try again."}</p><button type="button" onClick={() => void start()}>{es ? "Intentar de nuevo" : "Try again"}</button></div>}
+      {error && <p className="error" role="alert">{es ? "No se pudo procesar la respuesta. Inténtalo de nuevo." : "Could not process the reply. Please try again."}</p>}
+      <p className="demo-note">{es ? "Demostración: el micrófono está activo, pero la transcripción es simulada. Escribe lo que dirías." : "Demo: the microphone is active, but transcription is simulated. Type what you would say."}</p>
+      <form onSubmit={event => { event.preventDefault(); stt.current.submit(input); setInput(""); }}>
+        <label htmlFor="transcript">{es ? "Transcripción simulada" : "Fake transcript"}</label>
+        <div className="input-row"><input id="transcript" value={input} onChange={event => setInput(event.target.value)} disabled={state.phase === "idle"} /><button type="submit" disabled={state.phase === "idle" || !input.trim()}>{es ? "Enviar" : "Send"}</button></div>
+      </form>
+    </section>
+    <section className="conversation" aria-label={es ? "Conversación" : "Conversation"}>
+      <h2>{es ? "Conversación" : "Conversation"}</h2>
+      {transcript.length === 0 ? <p>{es ? "Tu conversación aparecerá aquí." : "Your conversation will appear here."}</p> : <ol aria-live="polite">{transcript.map((line, index) => <li key={index} className={line.role}><strong>{line.role === "user" ? (es ? "Tú" : "You") : line.role === "confirmation" ? (es ? "Confirmación" : "Confirmation") : (es ? "Asistente" : "Assistant")}</strong><p>{line.text}</p></li>)}</ol>}
+    </section>
   </main>;
 }

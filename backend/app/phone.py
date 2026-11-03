@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Reminder, Task
+from app.resilience import retry
 
 router = APIRouter(prefix="/phone")
 
@@ -117,7 +118,9 @@ class TwilioProvider:
         self.client = client
 
     def place_call(self, *, to: str, from_: str, url: str, status_callback: str) -> str:
-        call = self.client.calls.create(to=to, from_=from_, url=url, method="POST", status_callback=status_callback, status_callback_method="POST")
+        # A timeout or server error can mean a call was accepted. Only a 429
+        # confirms rejection and is safe to retry without duplicating a call.
+        call = retry(lambda: self.client.calls.create(to=to, from_=from_, url=url, method="POST", status_callback=status_callback, status_callback_method="POST"), retryable=lambda exc: getattr(exc, "status", None) == 429 or getattr(exc, "status_code", None) == 429)
         return call.sid
 
 

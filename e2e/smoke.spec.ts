@@ -55,3 +55,34 @@ test("new input interrupts speech and is processed", async ({ page }) => {
   expect(await page.evaluate(() => (window as unknown as { cancelCount: number }).cancelCount)).toBeGreaterThan(before);
   expect(await page.evaluate(() => (window as unknown as { speechCalls: { lang: string }[] }).speechCalls.at(-1)?.lang)).toBe("es-ES");
 });
+
+test("transcript, status and language remain visible", async ({ page }) => {
+  await page.getByLabel("Fake transcript").fill("demo action");
+  await page.getByRole("button", { name: "Send" }).click();
+  const conversation = page.getByRole("region", { name: "Conversation" });
+  await expect(conversation.getByText("demo action", { exact: true })).toBeVisible();
+  await expect(conversation.getByText("Understood.")).toBeVisible();
+  await expect(conversation.getByText(/Demo action completed/)).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText("Speaking");
+  await expect(page.getByLabel("Language")).toHaveText("Language: EN");
+  await page.getByLabel("Fake transcript").fill("Hola");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByLabel("Idioma")).toHaveText("Idioma: ES");
+});
+
+test("status moves through thinking and back to listening", async ({ page }) => {
+  await page.evaluate(() => {
+    const status = document.querySelector('[role="status"]')!;
+    const changes: string[] = [];
+    Object.assign(window, { statusChanges: changes });
+    new MutationObserver(records => records.forEach(record => {
+      if (record.oldValue) changes.push(record.oldValue);
+      changes.push(status.textContent || "");
+    })).observe(status, { subtree: true, characterData: true, characterDataOldValue: true, childList: true });
+    window.speechSynthesis.speak = utterance => { setTimeout(() => utterance.dispatchEvent(new Event("end")), 100); };
+  });
+  await page.getByLabel("Fake transcript").fill("Hello");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { statusChanges: string[] }).statusChanges)).toContain("Thinking");
+  await expect(page.getByRole("status")).toHaveText("Listening");
+});

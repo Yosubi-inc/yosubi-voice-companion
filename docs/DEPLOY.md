@@ -1,7 +1,7 @@
 # Demo deployment preparation
 
-Do not deploy this revision yet. The API has no authentication or ownership
-checks, and its profile and task endpoints must not be exposed to users. The
+Do not deploy this revision yet. The API has shared demo-token authentication
+but no individual identity or ownership checks. The
 web interface uses simulated speech and agent responses. It does not connect to
 the backend or the Meta Model API. The phone flow also uses a demo agent.
 The required Dockerfile and Railway service configuration are not supplied in
@@ -16,6 +16,8 @@ The current code reads the following variables:
 | Variable | Service | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | backend and scheduler | Required PostgreSQL connection URL. Use the managed database service reference. |
+| `DEMO_API_TOKEN` | backend | Shared bearer token for demo API routes; unset or empty leaves them open with a startup warning. |
+| `NEXT_PUBLIC_DEMO_API_TOKEN` | frontend build | Same demo token, included by the API request helper when set. Public in browser assets; use demo data only. |
 | `HOST` | backend | Bind address for `python -m app`. Defaults to `127.0.0.1`; set `0.0.0.0` explicitly only for the hosted container. |
 | `PORT` | backend | Port for `python -m app`; defaults to `8000`. Use the port assigned by the hosting platform. |
 | `TWILIO_AUTH_TOKEN` | backend and scheduler | Webhook signature verification; also needed for test calls. |
@@ -29,7 +31,9 @@ The current code reads the following variables:
 
 `MODEL_API_KEY` is required by the target specification, but the current app
 does not read it or make model calls. Do not claim model integration works by
-setting it. The frontend currently reads no application environment variables.
+setting it. The current simulated frontend does not yet call the backend. Configure
+the frontend token at build time. `/health` stays open and `/phone/*` continues
+to require Twilio signatures.
 
 ## Owner-approved deployment sequence
 

@@ -51,7 +51,13 @@ Contacts can have a `trusted_contact`, `family`, `friend`, or `caregiver` role; 
 
 `GET /safety/profiles/{profile_id}/incidents` accepts an optional `status` filter (`open`, `in_progress`, or `resolved`). `PATCH /safety/profiles/{profile_id}/incidents/{id}` changes status with explicit consent and, for a contact, an active `save_incident` grant. `GET /safety/lessons?language=en` or `language=es` returns local scam education text.
 
-The scaffold has no authentication. Profile IDs and contact IDs are not proof of identity. Keep this API local and add authenticated identity and ownership checks before exposing it to users. Use a fresh development database after schema changes: `create_all` does not update existing tables.
+Set `DEMO_API_TOKEN` in the backend process environment to require `Authorization: Bearer <token>` on profile, conversation, task, reminder, safety, guidance, and trust routes. When unset or empty, these routes remain open and the server logs a startup warning. `/health` remains open; `/phone/*` keeps Twilio signature authentication. The frontend API helper uses `NEXT_PUBLIC_DEMO_API_TOKEN` when set at build time. The current simulated web interface does not yet call the backend.
+
+The shared demo token is visible to browser users and does not provide individual identity or ownership checks. Use only demo data. Profile IDs and contact IDs are not proof of identity. Use a fresh development database after schema changes: `create_all` does not update existing tables.
+
+`/health` checks only that the process responds; `/ready` also checks database connectivity. API requests are limited to 120 per IP per minute per process; health probes are excluded. The limiter uses the direct peer address, not forwarded headers, and is not shared across workers. Request logs contain only a generated request ID, route template, and status. The model client seam is not connected to an endpoint yet; without `MODEL_API_KEY` it returns a bilingual 503. No model call is made by the existing routes.
+
+The scheduler commits an attempt before calling the provider. A crash can leave an attempt unresolved, even if the call was accepted. Check the provider's records before manually resolving it; do not automatically retry it. Twilio retries only explicit 429 rejections, because retrying a timeout or server error could place a duplicate call. Call acceptance is not proof of delivery.
 
 ## Telephone test channel
 

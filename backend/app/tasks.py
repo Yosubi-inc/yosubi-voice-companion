@@ -2,7 +2,8 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, StrictInt, field_validator
+from app.validation import RequestModel as BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -28,7 +29,7 @@ class TaskInput(BaseModel):
 
 
 class ReminderInput(BaseModel):
-    task_id: int
+    task_id: StrictInt
     kind: Literal["reminder", "callback"] = "reminder"
     due_at: datetime
 

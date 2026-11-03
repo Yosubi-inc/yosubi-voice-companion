@@ -74,8 +74,10 @@ integrations, complex outbound call automation.
   trusted contacts, grants, incidents, spend ledger, audit records.
 - Model inference: Meta Model API only. Base URL `https://api.meta.ai/v1`,
   OpenAI-compatible SDKs, Bearer `MODEL_API_KEY`.
-- Chat model: `muse-spark-1.3` Standard mode only. Never Contributor mode
-  (Contributor trains on sent content). Never `muse-wonder` (cost).
+- Chat model: `muse-spark-1.3` default, with a scored `muse-wonder` comparison
+  on quality + time-to-first-token; ship the winner (Spark on tie or slow).
+  Standard mode only. Never Contributor mode (Contributor trains on sent
+  content). Prompt caching on, streaming on, temperature 0 safety / 0.7 chat.
 - Speech to text: `muse-voice-transcribe-1.0` (streaming). $0.18/audio-hour.
 - Meta offers no text-to-speech API. Web uses browser SpeechSynthesis. Phone uses
   Twilio `<Say>` with ES-capable voices. Verify ES voice quality in testing.

@@ -44,7 +44,9 @@ driving). Never commit, never paste into chat.
 
 ## Operate
 
-- Deploy: push to `dev` (autoDeploy) or `POST /v1/services/{id}/deploys`.
+- Deploy: push to `dev`, then trigger manually — autoDeploy does NOT fire
+  on API-created services (no GitHub webhook attached):
+  `POST /v1/services/srv-dbkpnmou01pc73e05aig/deploys`.
   Poll `GET .../deploys/{depId}` (single object, `.status`) to `live`.
 - Seed: `POST /demo/seed` (Bearer token). Same shared Postgres as
   Railway, so the demo persona persists across hosts.

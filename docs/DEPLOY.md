@@ -1,5 +1,9 @@
 # Demo deployment runbook (Railway)
 
+> 2026-11-03: Meta's API 404s all Railway-egress traffic, so the web
+> service moves to Render. This file stays for Postgres + scheduler.
+> Web-service steps: [DEPLOY_RENDER.md](DEPLOY_RENDER.md).
+
 Target: public demo for hackathon judging (Nov 4-8). One image, two
 services, managed Postgres, all from this repo's `dev` branch.
 

@@ -8,11 +8,11 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, StrictBool
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Consent, Grant, Incident, Profile, TrustedContact
+from app.models import CircleActivity, Consent, EscalationRequest, Grant, Incident, Profile, TrustedContact
 
 router = APIRouter(prefix="/safety", tags=["safety"])
 Permission = Literal["receive_escalation", "save_incident"]
@@ -90,6 +90,7 @@ class ConsentAction(BaseModel):
 
 class ContactInput(ConsentAction):
     name: str = Field(min_length=1, max_length=200)
+    role: Literal["trusted_contact", "family", "friend", "caregiver"] = "trusted_contact"
 
 
 class GrantInput(ConsentAction):
@@ -103,7 +104,7 @@ class IncidentInput(ConsentAction):
 @router.post("/profiles/{profile_id}/contacts")
 def create_contact(profile_id: str, data: ContactInput, db: Session = Depends(get_db)):
     authorize(db, profile_id, "manage_circle", data.consent, data.contact_id)
-    contact = TrustedContact(profile_id=profile_id, name=data.name)
+    contact = TrustedContact(profile_id=profile_id, name=data.name, role=data.role)
     db.add(contact)
     db.commit()
     return {"id": contact.id}
@@ -146,3 +147,93 @@ def save_incident(profile_id: str, data: IncidentInput, db: Session = Depends(ge
 def escalation(profile_id: str, data: ConsentAction, db: Session = Depends(get_db)):
     authorize(db, profile_id, "receive_escalation", data.consent, data.contact_id)
     return {"en": "Please contact your approved trusted person directly.", "es": "Comuníquese directamente con su contacto de confianza aprobado."}
+
+
+class EscalationInput(BaseModel):
+    consent: StrictBool
+    contact_id: int
+    permission: Permission
+
+
+class DecisionInput(BaseModel):
+    consent: StrictBool
+    contact_id: int
+    decision: Literal["approved", "denied"]
+
+
+@router.post("/profiles/{profile_id}/escalations")
+def request_escalation(profile_id: str, data: EscalationInput, db: Session = Depends(get_db)):
+    authorize(db, profile_id, "receive_escalation", data.consent, data.contact_id)
+    authorize(db, profile_id, data.permission, data.consent, data.contact_id)
+    request = EscalationRequest(profile_id=profile_id, contact_id=data.contact_id, permission=data.permission)
+    db.add(request)
+    db.flush()
+    db.add(CircleActivity(profile_id=profile_id, contact_id=data.contact_id, request_id=request.id, event="requested"))
+    db.commit()
+    return {"id": request.id, "status": request.status}
+
+
+@router.post("/profiles/{profile_id}/escalations/{request_id}/decision")
+def decide_escalation(profile_id: str, request_id: int, data: DecisionInput, db: Session = Depends(get_db)):
+    request = db.get(EscalationRequest, request_id)
+    if request is None or request.profile_id != profile_id:
+        raise HTTPException(404, detail={"en": "Request not found.", "es": "Solicitud no encontrada."})
+    if request.contact_id != data.contact_id:
+        deny("This contact does not have permission.", "Este contacto no tiene permiso.")
+    authorize(db, profile_id, "receive_escalation", data.consent, data.contact_id)
+    authorize(db, profile_id, request.permission, data.consent, data.contact_id)
+    result = db.execute(update(EscalationRequest).where(EscalationRequest.id == request_id, EscalationRequest.status == "pending").values(status=data.decision))
+    if result.rowcount != 1:
+        raise HTTPException(409, detail={"en": "Request already decided.", "es": "La solicitud ya fue decidida."})
+    db.add(CircleActivity(profile_id=profile_id, contact_id=data.contact_id, request_id=request_id, event=data.decision))
+    db.commit()
+    return {"id": request_id, "status": data.decision}
+
+
+@router.get("/profiles/{profile_id}/activity")
+def circle_activity(profile_id: str, db: Session = Depends(get_db)):
+    rows = db.scalars(select(CircleActivity).where(CircleActivity.profile_id == profile_id).order_by(CircleActivity.id)).all()
+    return [{"id": row.id, "contact_id": row.contact_id, "request_id": row.request_id, "event": row.event, "recorded_at": row.recorded_at} for row in rows]
+
+
+IncidentStatus = Literal["open", "in_progress", "resolved"]
+
+
+class IncidentStatusInput(ConsentAction):
+    status: IncidentStatus
+
+
+@router.get("/profiles/{profile_id}/incidents")
+def list_incidents(profile_id: str, status: IncidentStatus | None = None, db: Session = Depends(get_db)):
+    query = select(Incident).where(Incident.profile_id == profile_id)
+    if status is not None:
+        query = query.where(Incident.status == status)
+    return [{"id": row.id, "summary": row.summary, "status": row.status} for row in db.scalars(query.order_by(Incident.id)).all()]
+
+
+@router.patch("/profiles/{profile_id}/incidents/{incident_id}")
+def update_incident(profile_id: str, incident_id: int, data: IncidentStatusInput, db: Session = Depends(get_db)):
+    authorize(db, profile_id, "save_incident", data.consent, data.contact_id)
+    incident = db.get(Incident, incident_id)
+    if incident is None or incident.profile_id != profile_id:
+        raise HTTPException(404, detail={"en": "Incident not found.", "es": "Incidente no encontrado."})
+    incident.status = data.status
+    db.commit()
+    return {"id": incident.id, "status": incident.status}
+
+
+LESSONS = {
+    "verification": {
+        "en": {"title": "Verify the caller", "text": "Pause when someone asks for urgent payment. Hang up and call the organization using a number you found independently."},
+        "es": {"title": "Verifique quién llama", "text": "Haga una pausa si alguien exige un pago urgente. Cuelgue y llame a la organización usando un número que encontró por su cuenta."},
+    },
+    "codes": {
+        "en": {"title": "Protect your codes", "text": "Never share a password or verification code with an unexpected caller. Ask a trusted person for help if you are unsure."},
+        "es": {"title": "Proteja sus códigos", "text": "Nunca comparta una contraseña o código de verificación con alguien que llama sin aviso. Si tiene dudas, pida ayuda a una persona de confianza."},
+    },
+}
+
+
+@router.get("/lessons")
+def lessons(language: Literal["en", "es"] = "en"):
+    return [{"id": key, "language": language, **content[language]} for key, content in LESSONS.items()]

@@ -2,6 +2,9 @@
   "name": "yosubi-voice-companion-frontend",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",

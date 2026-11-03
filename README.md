@@ -47,6 +47,10 @@ The API provides `POST /tasks`, `GET /tasks`, `PATCH /tasks/{id}`, `DELETE /task
 
 Trusted contacts and their `receive_escalation` or `save_incident` grants are managed under `/safety/profiles/{profile_id}`. Each change and sensitive action requires current profile consent and explicit action consent; a contact action also requires an active grant. Incident summaries are saved only through the consent-gated endpoint. Payments, purchases, account changes, and protected-information sharing are not supported.
 
+Contacts can have a `trusted_contact`, `family`, `friend`, or `caregiver` role; roles do not grant permissions. `POST /safety/profiles/{profile_id}/escalations` creates a request for a contact and a specific permission. Both that permission and `receive_escalation` must be granted. `POST /safety/profiles/{profile_id}/escalations/{id}/decision` records an `approved` or `denied` decision, checking both grants again. `GET /safety/profiles/{profile_id}/activity` shows request and decision activity. These records do not send messages or perform the requested action.
+
+`GET /safety/profiles/{profile_id}/incidents` accepts an optional `status` filter (`open`, `in_progress`, or `resolved`). `PATCH /safety/profiles/{profile_id}/incidents/{id}` changes status with explicit consent and, for a contact, an active `save_incident` grant. `GET /safety/lessons?language=en` or `language=es` returns local scam education text.
+
 The scaffold has no authentication. Profile IDs and contact IDs are not proof of identity. Keep this API local and add authenticated identity and ownership checks before exposing it to users. Use a fresh development database after schema changes: `create_all` does not update existing tables.
 
 ## Telephone test channel
@@ -56,3 +60,7 @@ The phone routes use a local demo agent with the same canned replies as the web 
 The scheduler makes test calls only when `PHONE_TEST_MODE=1` and `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `PHONE_TEST_DESTINATION`, and `PHONE_WEBHOOK_BASE_URL` are set in the process environment. Use Twilio test credentials and test phone numbers only. Set `PHONE_LANGUAGE=es` for Spanish reminder calls. Otherwise the scheduler reports a bilingual delivery failure. Call acceptance is recorded as request evidence, not proof that a person answered; status callbacks are authenticated but not persisted. A single configured test destination is shared by reminders; there is no user phone directory.
 
 Spanish uses Twilio `Polly.Mia` with `es-US`; English uses `Polly.Joanna` with `en-US`. The tests verify the requested voice and language in TwiML, not audio quality. Verify Spanish pronunciation and intelligibility with an owner-provisioned live number in a later authorized test; no live call was made here.
+
+### Assistance guidance
+
+`GET /guidance/healthcare`, `/guidance/government`, `/guidance/utilities`, and `/guidance/community` return local guidance. Pass `lang=en` or `lang=es`; the community endpoint also accepts `category`, such as `food`. Example categories are labeled `example` and are not real providers. The `community_resources` table holds local directory entries; create it with the existing `python -m app.database` development schema command. Backend agents can call `healthcare_guidance`, `government_guidance`, `utility_guidance`, and `community_directory` in `app.guidance` directly; the last takes a SQLAlchemy session. No external API is called.

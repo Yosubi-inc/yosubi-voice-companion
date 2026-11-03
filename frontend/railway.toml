@@ -1,0 +1,12 @@
+# Railway frontend service config (service root = frontend/).
+# Deploy itself needs owner approval; see docs/DEPLOY.md.
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "npx next start --hostname 0.0.0.0 -p $PORT"
+healthcheckPath = "/"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

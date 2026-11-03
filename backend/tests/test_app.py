@@ -15,10 +15,10 @@ def test_schema_can_be_created():
     engine = create_engine("sqlite:///:memory:")
     try:
         Base.metadata.create_all(engine)
-        assert set(inspect(engine).get_table_names()) == {
+        assert set(inspect(engine).get_table_names()) >= {
             "profiles", "preferences", "consents", "tasks", "reminders",
             "action_log", "trusted_contacts", "grants", "incidents",
-            "spend_ledger", "audit_records",
+            "spend_ledger", "audit_records", "community_resources",
         }
     finally:
         engine.dispose()

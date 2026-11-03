@@ -62,6 +62,7 @@ class TrustedContact(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    role: Mapped[str] = mapped_column(String(50), nullable=False, default="trusted_contact")
 
 
 class Grant(Base):
@@ -77,11 +78,41 @@ class Incident(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
+
+
+class EscalationRequest(Base):
+    __tablename__ = "escalation_requests"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("trusted_contacts.id", ondelete="CASCADE"), nullable=False)
+    permission: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+
+
+class CircleActivity(Base):
+    __tablename__ = "circle_activity"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("trusted_contacts.id", ondelete="CASCADE"), nullable=False)
+    request_id: Mapped[int] = mapped_column(ForeignKey("escalation_requests.id", ondelete="CASCADE"), nullable=False)
+    event: Mapped[str] = mapped_column(String(20), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class SpendLedger(Base):
     __tablename__ = "spend_ledger"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+
+class CommunityResource(Base):
+    __tablename__ = "community_resources"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    category: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    name_en: Mapped[str] = mapped_column(String(200), nullable=False)
+    name_es: Mapped[str] = mapped_column(String(200), nullable=False)
+    location: Mapped[str] = mapped_column(String(200), nullable=False)
+    contact: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class AuditRecord(Base):

@@ -5,10 +5,10 @@ from pydantic import BaseModel, Field, StrictBool, field_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Consent, Grant, Incident, Preference, Profile, TrustedContact
+from app.models import CircleActivity, Consent, EscalationRequest, Grant, Incident, Preference, Profile, TrustedContact
 from sqlalchemy import delete, select
 
-app = FastAPI(title="Yosubi Voice Companion")
+app = FastAPI(title="Yosubi Voice Companion", debug=False)
 
 FIELDS = ("name", "preferred_language", "communication_needs")
 # Drafts are conversation-only and are never written to the database before consent.
@@ -170,6 +170,8 @@ def correct(profile_id: str, answer: Answer, db: Session = Depends(get_db)):
 def delete_profile(profile_id: str, db: Session = Depends(get_db)):
     # Explicit deletes also work with SQLite when foreign keys are disabled.
     contact_ids = select(TrustedContact.id).where(TrustedContact.profile_id == profile_id)
+    db.execute(delete(CircleActivity).where(CircleActivity.profile_id == profile_id))
+    db.execute(delete(EscalationRequest).where(EscalationRequest.profile_id == profile_id))
     db.execute(delete(Grant).where(Grant.contact_id.in_(contact_ids)))
     db.execute(delete(TrustedContact).where(TrustedContact.profile_id == profile_id))
     db.execute(delete(Incident).where(Incident.profile_id == profile_id))
@@ -191,3 +193,6 @@ app.include_router(safety_router)
 
 from app.phone import router as phone_router
 app.include_router(phone_router)
+
+from app.guidance import router as guidance_router
+app.include_router(guidance_router)

@@ -1,0 +1,6 @@
+# TTS extras, installed into the single image. Pinned to locally proven versions.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0
+transformers==5.22.1
+scipy==1.18.1
+numpy==2.5.4

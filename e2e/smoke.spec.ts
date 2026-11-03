@@ -12,10 +12,32 @@ test.beforeEach(async ({ page, context }) => {
       start() { this.state = "recording"; }
       stop() { this.state = "inactive"; }
     } });
+    Object.defineProperty(window, "WebSocket", { value: class {
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readyState = 3;
+      constructor() { setTimeout(() => { if (this.onerror) this.onerror(); if (this.onclose) this.onclose(); }, 0); }
+      addEventListener() {}
+      removeEventListener() {}
+      send() {}
+      close() {}
+    } });
     const calls: { text: string; lang: string }[] = [];
     Object.assign(window, { speechCalls: calls, cancelCount: 0 });
-    window.speechSynthesis.speak = (utterance) => { calls.push({ text: utterance.text, lang: utterance.lang }); };
-    window.speechSynthesis.cancel = () => { (window as unknown as { cancelCount: number }).cancelCount++; };
+    const realFetch = window.fetch.bind(window);
+    window.fetch = (async (url: string, init?: { body?: string }) => {
+      if (String(url).includes("/tts")) {
+        const body = JSON.parse(init?.body || "{}");
+        calls.push({ text: body.text, lang: body.language === "es" ? "es-ES" : "en-US" });
+        return new Response(new ArrayBuffer(44), { status: 200 });
+      }
+      return realFetch(url, init);
+    }) as typeof fetch;
+    window.Audio = class {
+      onended: (() => void) | null = null; onerror: (() => void) | null = null;
+      play() { if ((window as unknown as { __endAudio?: boolean }).__endAudio) setTimeout(() => this.onended && this.onended(), 100); return Promise.resolve(); }
+      pause() { (window as unknown as { cancelCount: number }).cancelCount++; if (this.onended) this.onended(); }
+    } as unknown as typeof Audio;
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Talk" }).click();
@@ -85,7 +107,7 @@ test("status moves through thinking and back to listening", async ({ page }) => 
       if (record.oldValue) changes.push(record.oldValue);
       changes.push(status.textContent || "");
     })).observe(status, { subtree: true, characterData: true, characterDataOldValue: true, childList: true });
-    window.speechSynthesis.speak = utterance => { setTimeout(() => utterance.dispatchEvent(new Event("end")), 100); };
+    (window as unknown as { __endAudio: boolean }).__endAudio = true;
   });
   await page.getByLabel("Type here").fill("Hello");
   await page.getByRole("button", { name: "Send" }).click();

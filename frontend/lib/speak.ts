@@ -8,71 +8,75 @@ export function toSpokenText(markdown: string): string {
     .replace(/```[^\n]*\n?|```/g, "")
     .replace(/[*_~`#]/g, "")
     .replace(/\p{Extended_Pictographic}\uFE0F?/gu, "")
-    .replace(/[\uFE0F\u200D]/g, "")
+    .replace(/[﹋-￯]/g, "")
     .replace(/\s+/g, " ")
     .replace(/\s+,/g, ",")
     .replace(/^,\s*/, "")
     .trim();
 }
 
-export function pickVoice(voices: SpeechSynthesisVoice[], lang: Language | "en-US" | "es-ES"): SpeechSynthesisVoice | undefined {
-  const target = lang.startsWith("es") ? "es" : "en";
-  const matching = voices.filter(voice => voice.lang.toLowerCase().split(/[-_]/)[0] === target);
-  const female = target === "es"
-    ? /paulina|sabina|google espa[ñn]ol|microsoft.*(aria|jenny).*natural|femenina|female/i
-    : /aria|jenny|samantha|zira|google us english|female/i;
-  const natural = /microsoft.*natural|siri|natural|neural/i;
-  return matching.find(voice => female.test(voice.name))
-    ?? matching.find(voice => natural.test(voice.name))
-    ?? matching.find(voice => voice.lang.toLowerCase() === (target === "es" ? "es-es" : "en-us"))
-    ?? matching[0];
+export function ttsBase(): string {
+  return (process.env.NEXT_PUBLIC_TTS_URL || "").replace(/\/$/, "");
 }
 
-let currentCancel: (() => void) | undefined;
+let generation = 0;
+let currentAudio: HTMLAudioElement | null = null;
 
 export function cancelSpeech(): void {
-  currentCancel?.();
-  window.speechSynthesis.cancel();
+  generation++;
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
 }
 
-export function speakReply(text: string, lang: Language | "en-US" | "es-ES"): Promise<void> {
-  cancelSpeech();
-  const cleaned = toSpokenText(text);
-  const chunks = cleaned.match(/[^.!?]+[.!?]+[”"']*|[^.!?]+$/g)?.map(chunk => chunk.trim()).filter(Boolean) ?? [];
-  if (!chunks.length) return Promise.resolve();
+function playBlob(blob: Blob, turn: number): Promise<void> {
   return new Promise(resolve => {
-    const synth = window.speechSynthesis;
-    let done = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      if (timer) clearTimeout(timer);
-      synth.removeEventListener("voiceschanged", start);
-      if (currentCancel === finish) currentCancel = undefined;
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    const done = () => {
+      URL.revokeObjectURL(url);
+      if (currentAudio === audio) currentAudio = null;
       resolve();
     };
-    const start = () => {
-      if (done) return;
-      if (timer) clearTimeout(timer);
-      synth.removeEventListener("voiceschanged", start);
-      const voice = pickVoice(synth.getVoices(), lang);
-      chunks.forEach((chunk, index) => {
-        const utterance = new SpeechSynthesisUtterance(chunk);
-        utterance.lang = lang.startsWith("es") ? "es-ES" : "en-US";
-        utterance.rate = 0.95;
-        utterance.pitch = 1.05;
-        if (voice) utterance.voice = voice;
-        if (index === chunks.length - 1) utterance.onend = utterance.onerror = finish;
-        synth.speak(utterance);
-      });
-    };
-    currentCancel = finish;
-    if (synth.getVoices().length) start();
-    else {
-      synth.addEventListener("voiceschanged", start);
-      timer = setTimeout(start, 250);
-    }
+    audio.onended = done;
+    audio.onerror = done;
+    if (turn !== generation) { done(); return; }
+    audio.play().catch(done);
   });
 }
 
+export async function speakReply(text: string, lang: Language | "en-US" | "es-ES"): Promise<void> {
+  const turn = ++generation;
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
+  const base = ttsBase();
+  if (!base) return;
+  const language = lang.startsWith("es") ? "es" : "en";
+  const cleaned = toSpokenText(text);
+  const chunks = cleaned.match(/[^.!?]+[.!?]+[”"']*|[^.!?]+$/g)?.map(chunk => chunk.trim()).filter(Boolean) ?? [];
+  const token = process.env.NEXT_PUBLIC_DEMO_API_TOKEN || "";
+  const blobs: Blob[] = [];
+  for (const chunk of chunks) {
+    if (turn !== generation) return;
+    let response: Response;
+    try {
+      response = await fetch(`${base}/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ text: chunk, language }),
+      });
+    } catch {
+      return;
+    }
+    if (!response.ok || turn !== generation) return;
+    blobs.push(await response.blob());
+  }
+  for (const blob of blobs) {
+    if (turn !== generation) return;
+    await playBlob(blob, turn);
+  }
+}

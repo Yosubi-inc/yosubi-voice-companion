@@ -26,6 +26,16 @@ test("recorded audio and chat reach backend", async ({ page }) => {
       stop() { this.state = "inactive"; this.ondataavailable?.({ data: new Blob(["audio"], { type: "audio/webm" }) }); this.onstop?.(); }
     } });
     window.speechSynthesis.speak = () => {};
+    Object.defineProperty(window, "WebSocket", { value: class {
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readyState = 3;
+      constructor() { setTimeout(() => { if (this.onerror) this.onerror(); if (this.onclose) this.onclose(); }, 0); }
+      addEventListener() {}
+      removeEventListener() {}
+      send() {}
+      close() {}
+    } });
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Talk" }).click();
@@ -40,6 +50,16 @@ test("unreachable backend uses fake response", async ({ page }) => {
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", { value: async () => ({ getTracks: () => [{ stop() {} }] }) });
     Object.defineProperty(window, "MediaRecorder", { value: class { state = "inactive"; start() { this.state = "recording"; } stop() { this.state = "inactive"; } } });
     window.speechSynthesis.speak = () => {};
+    Object.defineProperty(window, "WebSocket", { value: class {
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readyState = 3;
+      constructor() { setTimeout(() => { if (this.onerror) this.onerror(); if (this.onclose) this.onclose(); }, 0); }
+      addEventListener() {}
+      removeEventListener() {}
+      send() {}
+      close() {}
+    } });
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Talk" }).click();

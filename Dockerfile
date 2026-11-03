@@ -12,14 +12,19 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/srv/backend
+    PYTHONPATH=/srv/backend:/srv
 
 WORKDIR /srv
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY tts/requirements.txt ./tts-requirements.txt
+RUN pip install --no-cache-dir -r tts-requirements.txt
+
 COPY backend/ ./backend/
+COPY tts/ ./tts/
+RUN python -c "from transformers import VitsModel, VitsTokenizer; [VitsTokenizer.from_pretrained(c) or VitsModel.from_pretrained(c) for c in ('facebook/mms-tts-eng', 'facebook/mms-tts-spa')]"
 COPY --from=web /build/frontend/out ./frontend/out
 COPY start.sh ./start.sh
 

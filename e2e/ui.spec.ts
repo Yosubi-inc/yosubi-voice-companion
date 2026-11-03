@@ -43,6 +43,16 @@ test("microphone failure can be retried", async ({ page }) => {
       start() { this.state = "recording"; }
       stop() { this.state = "inactive"; }
     } });
+    Object.defineProperty(window, "WebSocket", { value: class {
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readyState = 3;
+      constructor() { setTimeout(() => { if (this.onerror) this.onerror(); if (this.onclose) this.onclose(); }, 0); }
+      addEventListener() {}
+      removeEventListener() {}
+      send() {}
+      close() {}
+    } });
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Talk" }).click();

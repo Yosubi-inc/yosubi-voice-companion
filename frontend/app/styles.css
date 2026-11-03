@@ -11,6 +11,7 @@ h2 { font-size: 1.8rem; margin: 0 0 1rem; }
 .indicators p { margin: 0 0 .75rem; }
 .status-dot { display: inline-block; width: 1.2rem; height: 1.2rem; border-radius: 50%; border: 3px solid var(--muted); margin-right: .75rem; vertical-align: baseline; }
 .status-dot.listening, .status-dot.speaking { background: var(--accent); border-color: var(--accent); }
+.partial { color: var(--muted); margin: 0 0 .75rem; }
 button, input { font: inherit; }
 button { cursor: pointer; border: 3px solid var(--accent); border-radius: 1rem; background: var(--accent); color: var(--accent-text); font-weight: bold; padding: 1rem 1.25rem; min-height: 64px; }
 button:disabled { opacity: .6; cursor: not-allowed; }

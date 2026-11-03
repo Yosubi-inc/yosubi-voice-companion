@@ -6,4 +6,7 @@ if [ "$SERVICE_ROLE" = "scheduler" ]; then
   python -m app.database
   exec python -m app.scheduler
 fi
+if [ "$SERVICE_ROLE" = "tts" ]; then
+  exec uvicorn tts.app:app --host 0.0.0.0 --port "${PORT:-8000}"
+fi
 exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"

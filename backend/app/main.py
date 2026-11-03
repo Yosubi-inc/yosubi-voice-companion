@@ -313,6 +313,9 @@ app.include_router(phone_router)
 from app.guidance import router as guidance_router
 app.include_router(guidance_router)
 
+from app.realtime import router as realtime_router
+app.include_router(realtime_router)
+
 from app.demo import router as demo_router
 app.include_router(demo_router)
 

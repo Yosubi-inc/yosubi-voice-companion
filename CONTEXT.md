@@ -6,7 +6,7 @@ Bilingual voice assistant for older adults. Meta Global AI Hackathon entry.
 
 - Project slug: `yosubi-voice-companion`.
 - Repository path: `C:\Users\gabri\projects\yosubi-voice-companion`.
-- GitHub repo: not created yet. Local only until the owner approves creation.
+- GitHub repo: https://github.com/Yosubi-inc/yosubi-voice-companion (public, default branch dev).
 - Canonical spec: `SPEC.md` in this repo. Meta docs: https://dev.meta.ai/docs/.
 
 ## Success criteria

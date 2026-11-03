@@ -1,6 +1,6 @@
 # Five-minute demo: Sparks, your community companion
 
-Live demo: `https://yosubi-voice-companion.onrender.com`
+Live demo: `https://sparks-epjn.onrender.com`
 All people and records are fictional (seeded persona María Vega).
 Have the demo token ready; never show it on screen.
 Everything spoken and heard runs on Meta: realtime transcription hears,

@@ -1,7 +1,7 @@
 # Demo hosting, part 2: web service on Render
 
-Live: https://yosubi-voice-companion.onrender.com
-(Service `srv-dbkpnmou01pc73e05aig`, region Oregon, plan free, branch `dev`.)
+Live: https://sparks-epjn.onrender.com
+(Service `srv-dbl0a0ijnfac73a512qg` named `sparks`, region Oregon, plan free, branch `dev`.)
 
 Why Render: Meta's model API answers **404 to every request from
 Railway's network** (both regions, any key, IPv4 and IPv6), while the same
@@ -46,7 +46,7 @@ driving). Never commit, never paste into chat.
 
 - Deploy: push to `dev`, then trigger manually — autoDeploy does NOT fire
   on API-created services (no GitHub webhook attached):
-  `POST /v1/services/srv-dbkpnmou01pc73e05aig/deploys`.
+  `POST /v1/services/srv-dbl0a0ijnfac73a512qg/deploys`.
   Poll `GET .../deploys/{depId}` (single object, `.status`) to `live`.
 - Seed: `POST /demo/seed` (Bearer token). Same shared Postgres as
   Railway, so the demo persona persists across hosts.

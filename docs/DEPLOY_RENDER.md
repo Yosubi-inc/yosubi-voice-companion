@@ -52,8 +52,9 @@ driving). Never commit, never paste into chat.
   Railway, so the demo persona persists across hosts.
 - Spend: `GET /spend/summary` (Bearer token).
 - Logs: Render dashboard, or `GET /v1/services/{id}/logs`.
-- The old Railway backend still serves the page but its `/chat` 503s
-  (Meta 404). Delete it after judging, or keep as a spare static page.
+- The old Railway backend was deleted 2026-11-03 (its `/chat` 503'd on
+  the Meta 404, and its demo token touched session logs). Railway now
+  holds only Postgres + scheduler.
 
 ## Notes
 

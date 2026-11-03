@@ -125,7 +125,7 @@ export default function Home() {
       {micError && <div className="error" role="alert"><p>{es ? "No se pudo usar el micrófono. Comprueba el permiso e inténtalo de nuevo." : "Could not use the microphone. Check its permission and try again."}</p><button type="button" onClick={() => void start()}>{es ? "Intentar de nuevo" : "Try again"}</button></div>}
       {error && <p className="error" role="alert">{es ? "No se pudo procesar la respuesta. Inténtalo de nuevo." : "Could not process the reply. Please try again."}</p>}
 
-      <form onSubmit={event => { event.preventDefault(); stt.current.submit(input); setInput(""); }}>
+      <form onSubmit={event => { event.preventDefault(); session.current?.submit(input); setInput(""); }}>
         <label htmlFor="transcript">{es ? "Escribe aquí" : "Type here"}</label>
         <div className="input-row"><input id="transcript" value={input} onChange={event => setInput(event.target.value)} disabled={state.phase === "idle"} /><button type="submit" disabled={state.phase === "idle" || !input.trim()}>{es ? "Enviar" : "Send"}</button></div>
       </form>

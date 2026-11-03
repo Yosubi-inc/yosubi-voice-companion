@@ -5,6 +5,7 @@ import type { Language } from "./conversation";
 export interface TranscriptionSession {
   pushAudio(chunk: Blob): void;
   stop(): void;
+  submit(text: string): void;
 }
 export interface SpeechToText {
   start(onFinal: (text: string) => void): TranscriptionSession;
@@ -18,9 +19,8 @@ export class FakeSTT implements SpeechToText {
   private onFinal: ((text: string) => void) | null = null;
   start(onFinal: (text: string) => void): TranscriptionSession {
     this.onFinal = onFinal;
-    return { pushAudio: () => {}, stop: () => { this.onFinal = null; } };
+    return { pushAudio: () => {}, stop: () => { this.onFinal = null; }, submit: (text: string) => this.onFinal?.(text) };
   }
-  submit(text: string) { this.onFinal?.(text); }
 }
 
 export function detectLanguage(text: string, previous: Language): Language {
@@ -64,6 +64,7 @@ export class BackendSTT extends FakeSTT {
         void transcribeAudio(audio, this.language()).then(text => { if (active && text.trim()) onFinal(text); }).catch(() => {}).finally(() => { busy = false; });
       },
       stop: () => { active = false; fake.stop(); },
+      submit: (text: string) => { if (active) onFinal(text); },
     };
   }
 }

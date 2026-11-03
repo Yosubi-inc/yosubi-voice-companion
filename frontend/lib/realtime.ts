@@ -84,6 +84,7 @@ export class RealtimeSTT {
     const session: TranscriptionSession & { ready: Promise<void> } = {
       ready,
       pushAudio: () => {},
+      submit: (text: string) => { if (!stopped) onFinal(text); },
       stop: () => {
         try { socket?.send(JSON.stringify({ type: "endStream" })); } catch { /* closed */ }
         cleanup();

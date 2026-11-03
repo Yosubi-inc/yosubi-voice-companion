@@ -35,4 +35,5 @@ test("realtime session keeps the text form working", async ({ page, context }) =
   await page.getByLabel("Type here").fill("Hello");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByRole("region", { name: "Conversation" }).getByText("Hello", { exact: true })).toBeVisible();
+  await expect(page.locator(".conversation ol li:last-child")).toBeInViewport();
 });

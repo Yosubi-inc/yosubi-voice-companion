@@ -51,6 +51,9 @@ export default function Home() {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
     fetch("/health").catch(() => {});
   }, []);
+  useEffect(() => {
+    document.querySelector(".conversation ol li:last-child")?.scrollIntoView({ block: "nearest" });
+  }, [transcript.length]);
   const onFinal = async (text: string) => {
     if (!text.trim() || stateRef.current.phase === "idle") return;
     const turn = ++generation.current;

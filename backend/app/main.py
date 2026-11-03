@@ -1,4 +1,5 @@
 from uuid import uuid4
+from pathlib import Path
 from contextlib import asynccontextmanager
 import hmac
 import logging
@@ -13,6 +14,8 @@ import httpx
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exceptions import RequestValidationError
 from pydantic import Field, StrictBool, field_validator
 from app.validation import RequestModel as BaseModel
@@ -339,3 +342,35 @@ def chat_endpoint(body: ChatInput):
         return {"text": reply}
     except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
         raise HTTPException(503, detail={"en": "The assistant is unavailable right now.", "es": "El asistente no está disponible en este momento."}) from None
+
+
+class FrontendFiles(StaticFiles):
+    async def check_config(self):
+        # The export may not exist when the backend is tested on its own.
+        pass
+
+    async def get_response(self, path, scope):
+        if not Path(self.directory).is_dir():
+            raise StarletteHTTPException(status_code=404)
+        try:
+            response = await super().get_response(path, scope)
+            if response.status_code != 404:
+                return response
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404:
+                raise
+        # Missing API endpoints must not be mistaken for frontend pages.
+        first = path.replace("\\", "/").lstrip("/").split("/", 1)[0]
+        if first in {
+            "api", "health", "ready", "profiles", "conversations", "tasks",
+            "reminders", "safety", "guidance", "trust", "chat", "stt",
+            "spend", "phone", "demo",
+        }:
+            raise StarletteHTTPException(status_code=404)
+        return await super().get_response("index.html", scope)
+
+
+app.mount("/", FrontendFiles(
+    directory=Path(__file__).resolve().parents[2] / "frontend" / "out",
+    html=True, check_dir=False,
+), name="frontend")

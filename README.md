@@ -1,6 +1,6 @@
 # Yosubi Voice Companion
 
-The web demo sends recorded audio to `/stt` and chat turns to `/chat` through the frontend proxy. The backend currently has no chat HTTP route, so chat uses demo replies until that route is supplied. If the backend is unreachable, enter a simulated transcript. Set `DEMO_OFFLINE=1` before starting the frontend to use fakes. `BACKEND_URL` sets the backend origin (default `http://127.0.0.1:8000`).
+The web demo sends recorded audio to `/stt` and chat turns to `/chat` on the same origin. Build the static frontend with `npm --prefix frontend run build`; FastAPI serves `frontend/out` at `/`. For local frontend development against a separate backend, set `BACKEND_URL` (or `NEXT_PUBLIC_API_BASE`) before starting or building the frontend. Set `DEMO_OFFLINE=1` before starting the frontend to use fakes.
 
 The supervisor can run `python backend/eval_models.py` with a configured backend database and model credential. The live section is marked SUPERVISOR-RUN and skips without the credential. Initialize the spend ledger schema first. Mock tests make no live calls.
 
@@ -51,7 +51,7 @@ Contacts can have a `trusted_contact`, `family`, `friend`, or `caregiver` role; 
 
 `GET /safety/profiles/{profile_id}/incidents` accepts an optional `status` filter (`open`, `in_progress`, or `resolved`). `PATCH /safety/profiles/{profile_id}/incidents/{id}` changes status with explicit consent and, for a contact, an active `save_incident` grant. `GET /safety/lessons?language=en` or `language=es` returns local scam education text.
 
-Set `DEMO_API_TOKEN` in the backend process environment to require `Authorization: Bearer <token>` on profile, conversation, task, reminder, safety, guidance, and trust routes. When unset or empty, these routes remain open and the server logs a startup warning. `/health` remains open; `/phone/*` keeps Twilio signature authentication. The frontend API helper uses `NEXT_PUBLIC_DEMO_API_TOKEN` when set at build time. The web interface calls the backend through its proxy.
+Set `DEMO_API_TOKEN` in the backend process environment to require `Authorization: Bearer <token>` on profile, conversation, task, reminder, safety, guidance, and trust routes. When unset or empty, these routes remain open and the server logs a startup warning. `/health` remains open; `/phone/*` keeps Twilio signature authentication. The frontend API helper uses `NEXT_PUBLIC_DEMO_API_TOKEN` when set at build time. The web interface calls the backend directly.
 
 The shared demo token is visible to browser users and does not provide individual identity or ownership checks. Use only demo data. Profile IDs and contact IDs are not proof of identity. Use a fresh development database after schema changes: `create_all` does not update existing tables.
 

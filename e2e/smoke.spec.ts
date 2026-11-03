@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page, context }) => {
+  await page.route("**/chat", route => route.abort());
+  await page.route("**/stt?*", route => route.abort());
   await context.grantPermissions(["microphone"]);
   await page.addInitScript(() => {
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", { value: async () => ({ getTracks: () => [{ stop() {} }] }) });

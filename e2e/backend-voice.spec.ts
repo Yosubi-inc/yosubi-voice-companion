@@ -15,9 +15,9 @@ test("frontend source contains no model credential name", () => {
 });
 
 test("recorded audio and chat reach backend", async ({ page }) => {
-  await page.route("**/backend/stt?*", route => route.fulfill({ json: { transcript: "Hello", language: "en" } }));
+  await page.route("**/stt?*", route => route.fulfill({ json: { transcript: "Hello", language: "en" } }));
   let chatBody: any;
-  await page.route("**/backend/chat", async route => { chatBody = route.request().postDataJSON(); await route.fulfill({ json: { text: "Backend reply" } }); });
+  await page.route("**/chat", async route => { chatBody = route.request().postDataJSON(); await route.fulfill({ json: { text: "Backend reply" } }); });
   await page.addInitScript(() => {
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", { value: async () => ({ getTracks: () => [{ stop() {} }] }) });
     Object.defineProperty(window, "MediaRecorder", { value: class {
@@ -34,7 +34,8 @@ test("recorded audio and chat reach backend", async ({ page }) => {
 });
 
 test("unreachable backend uses fake response", async ({ page }) => {
-  await page.route("**/backend/**", route => route.abort());
+  await page.route("**/stt?*", route => route.abort());
+  await page.route("**/chat", route => route.abort());
   await page.addInitScript(() => {
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", { value: async () => ({ getTracks: () => [{ stop() {} }] }) });
     Object.defineProperty(window, "MediaRecorder", { value: class { state = "inactive"; start() { this.state = "recording"; } stop() { this.state = "inactive"; } } });

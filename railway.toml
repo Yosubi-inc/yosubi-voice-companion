@@ -1,5 +1,5 @@
-# Railway backend service config (service root = repo root).
-# Deploy itself needs owner approval; see docs/DEPLOY.md.
+# Single image, two roles via SERVICE_ROLE (web default, scheduler).
+# No healthcheck gate: the scheduler role serves no HTTP.
 # No secrets here; credentials are Railway service variables.
 
 [build]
@@ -7,8 +7,6 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "python -m app"
-healthcheckPath = "/health"
-healthcheckTimeout = 100
+startCommand = "./start.sh"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10

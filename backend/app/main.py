@@ -8,6 +8,8 @@ import math
 import time
 from collections import deque
 from threading import Lock
+from typing import Literal
+import httpx
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -73,7 +75,7 @@ async def observe_and_limit(request: Request, call_next):
 
 
 async def demo_auth(request: Request, call_next):
-    protected = {"profiles", "conversations", "tasks", "reminders", "safety", "guidance", "trust"}
+    protected = {"profiles", "conversations", "tasks", "reminders", "safety", "guidance", "trust", "chat", "stt"}
     token = os.getenv("DEMO_API_TOKEN")
     if token and request.url.path.strip("/").split("/", 1)[0] in protected:
         authorization = request.headers.get("authorization", "")
@@ -283,3 +285,30 @@ app.include_router(guidance_router)
 
 from app.demo import router as demo_router
 app.include_router(demo_router)
+
+from app.stt import stt_endpoint
+
+app.post('/stt')(stt_endpoint)
+
+from app import meta
+
+
+class ChatMessage(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: str = Field(min_length=1, max_length=20000)
+
+
+class ChatInput(BaseModel):
+    messages: list[ChatMessage] = Field(min_length=1, max_length=100)
+    language: Literal["en", "es"] = "en"
+
+
+@app.post("/chat")
+def chat_endpoint(body: ChatInput):
+    try:
+        reply = meta.chat([message.model_dump() for message in body.messages], engine=get_engine())
+        if not isinstance(reply, str):
+            raise ValueError("Invalid reply")
+        return {"text": reply}
+    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+        raise HTTPException(503, detail={"en": "The assistant is unavailable right now.", "es": "El asistente no está disponible en este momento."}) from None

@@ -10,3 +10,23 @@ export function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Prom
   if (authorization) headers.set("Authorization", authorization);
   return fetch(input, { ...init, headers });
 }
+
+
+const offline = process.env.NEXT_PUBLIC_DEMO_OFFLINE === "1";
+export async function transcribeAudio(audio: Blob, language: "en" | "es"): Promise<string> {
+  if (offline) throw new TypeError("offline");
+  const response = await apiFetch(`/backend/stt?language=${language}`, { method: "POST", headers: { "Content-Type": audio.type.split(";")[0] || "audio/webm" }, body: audio });
+  if (!response.ok) throw new TypeError("transcription unavailable");
+  const data = await response.json();
+  if (typeof data.transcript !== "string") throw new Error("Invalid transcript");
+  return data.transcript;
+}
+export async function chat(messages: { role: string; content: string }[], language: "en" | "es"): Promise<string> {
+  if (offline) throw new TypeError("offline");
+  const response = await apiFetch("/backend/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages, language }) });
+  if ([404, 500, 502, 503, 504].includes(response.status)) throw new TypeError("chat unavailable");
+  if (!response.ok) throw new Error("Chat request failed");
+  const data = await response.json();
+  if (typeof data.text !== "string") throw new Error("Invalid chat response");
+  return data.text;
+}

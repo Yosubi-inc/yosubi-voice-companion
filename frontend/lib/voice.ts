@@ -1,3 +1,4 @@
+import { chat, transcribeAudio } from "./api";
 import type { Language } from "./conversation";
 
 // A streaming adapter receives audio chunks and emits endpointed final transcripts.
@@ -37,5 +38,32 @@ export class FakeAgent implements Agent {
     const isAction = /\b(demo action|acción de prueba|accion de prueba)\b/i.test(text);
     if (isAction) return { language, text: language === "es" ? "Entendido." : "Understood.", actionConfirmation: language === "es" ? "Acción de prueba completada. No se cambió nada fuera de esta demostración." : "Demo action completed. Nothing outside this demonstration was changed." };
     return { language, text: language === "es" ? "Te escucho. ¿En qué puedo ayudarte?" : "I am listening. How can I help?" };
+  }
+}
+
+export class BackendAgent implements Agent {
+  private fallback = new FakeAgent();
+  async complete(messages: ChatMessage[], language: Language): Promise<AgentReply> {
+    try { return { text: await chat(messages, language), language }; }
+    catch (error) {
+      if (error instanceof TypeError) return this.fallback.complete(messages, language);
+      throw error;
+    }
+  }
+}
+export class BackendSTT extends FakeSTT {
+  constructor(private language: () => Language) { super(); }
+  start(onFinal: (text: string) => void): TranscriptionSession {
+    const fake = super.start(onFinal);
+    let active = true;
+    let busy = false;
+    return {
+      pushAudio: (audio) => {
+        if (busy || !active) return;
+        busy = true;
+        void transcribeAudio(audio, this.language()).then(text => { if (active && text.trim()) onFinal(text); }).catch(() => {}).finally(() => { busy = false; });
+      },
+      stop: () => { active = false; fake.stop(); },
+    };
   }
 }

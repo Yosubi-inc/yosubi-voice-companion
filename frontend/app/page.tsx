@@ -6,6 +6,7 @@ import "./styles.css";
 import { transition, type State } from "../lib/conversation";
 import { cancelSpeech, speakReply } from "../lib/speak";
 import { RealtimeSTT } from "../lib/realtime";
+import { Waveform } from "./waveform";
 import { detectLanguage, BackendAgent, BackendSTT, type ChatMessage, type TranscriptionSession } from "../lib/voice";
 
 export default function Home() {
@@ -48,6 +49,7 @@ export default function Home() {
   }, []);
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    fetch("/health").catch(() => {});
   }, []);
   const onFinal = async (text: string) => {
     if (!text.trim() || stateRef.current.phase === "idle") return;
@@ -117,6 +119,7 @@ export default function Home() {
         <p role="status"><span className={`status-dot ${state.phase}`} aria-hidden="true" />{status}</p>
         <p aria-label={es ? "Idioma" : "Language"}>{es ? "Idioma: ES" : "Language: EN"}</p>
         {partial !== "" && <p aria-live="polite" className="partial">{partial}</p>}
+        <Waveform active={state.phase === "listening" || state.phase === "speaking"} color={state.phase === "speaking" ? "blue" : "green"} />
       </div>
       <button className={`voice-button ${state.phase === "idle" ? "talk" : "stop"}`} type="button" onClick={() => state.phase === "idle" ? void start() : stop()}>{state.phase === "idle" ? <><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" /><path d="M5 11a7 7 0 0 0 14 0" fill="none" stroke="currentColor" strokeWidth="2" /><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" /></svg><span>{es ? "Hablar" : "Talk"}</span></> : <><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg><span>{es ? "Alto" : "Stop"}</span></>}</button>
       {micError && <div className="error" role="alert"><p>{es ? "No se pudo usar el micrófono. Comprueba el permiso e inténtalo de nuevo." : "Could not use the microphone. Check its permission and try again."}</p><button type="button" onClick={() => void start()}>{es ? "Intentar de nuevo" : "Try again"}</button></div>}

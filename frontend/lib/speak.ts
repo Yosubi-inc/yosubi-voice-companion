@@ -21,6 +21,12 @@ export function ttsBase(): string {
 
 let generation = 0;
 let currentAudio: HTMLAudioElement | null = null;
+let speechAnalyser: AnalyserNode | null = null;
+let speechContext: AudioContext | null = null;
+
+export function getSpeechAnalyser(): AnalyserNode | null {
+  return currentAudio ? speechAnalyser : null;
+}
 
 export function cancelSpeech(): void {
   generation++;
@@ -35,6 +41,17 @@ function playBlob(blob: Blob, turn: number): Promise<void> {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     currentAudio = audio;
+    try {
+      speechContext = speechContext ?? new AudioContext();
+      void speechContext.resume().catch(() => {});
+      const source = speechContext.createMediaElementSource(audio);
+      speechAnalyser = speechContext.createAnalyser();
+      speechAnalyser.fftSize = 256;
+      source.connect(speechAnalyser);
+      speechAnalyser.connect(speechContext.destination);
+    } catch {
+      speechAnalyser = null;
+    }
     const done = () => {
       URL.revokeObjectURL(url);
       if (currentAudio === audio) currentAudio = null;

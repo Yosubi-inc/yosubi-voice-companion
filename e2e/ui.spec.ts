@@ -25,6 +25,10 @@ for (const width of [360, 1280]) {
       };
       const values = [luminance(colors.color), luminance(colors.background)].sort((a, b) => b - a);
       expect((values[0] + 0.05) / (values[1] + 0.05)).toBeGreaterThanOrEqual(4.5);
+      const canvas = page.locator("canvas.waveform");
+      await expect(canvas).toBeVisible();
+      const canvasBox = await canvas.boundingBox();
+      expect(canvasBox!.width).toBeGreaterThan(200);
       await context.close();
     });
   }

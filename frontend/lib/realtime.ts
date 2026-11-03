@@ -39,6 +39,16 @@ export function voiceStreamUrl(language: Language, token = process.env.NEXT_PUBL
   return `${protocol}//${host}/voice/stream?token=${encodeURIComponent(token)}&language=${language}`;
 }
 
+let micAnalyser: AnalyserNode | null = null;
+
+export function getMicAnalyser(): AnalyserNode | null {
+  return micAnalyser;
+}
+
+function setMicAnalyser(node: AnalyserNode | null): void {
+  micAnalyser = node;
+}
+
 export interface RealtimeOptions {
   language: () => Language;
   stream: () => MediaStream | null;
@@ -68,6 +78,7 @@ export class RealtimeSTT {
       socket = null;
       if (context) void context.close().catch(() => {});
       context = null;
+      setMicAnalyser(null);
     };
 
     const session: TranscriptionSession & { ready: Promise<void> } = {
@@ -103,6 +114,10 @@ export class RealtimeSTT {
         if (stopped) return;
         const audio = new AudioContext({ latencyHint: "interactive" });
         context = audio;
+        await audio.resume().catch(() => {});
+        const analyser = audio.createAnalyser();
+        analyser.fftSize = 256;
+        setMicAnalyser(analyser);
         await audio.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" })));
         const source = audio.createMediaStreamSource(media);
         const node = new AudioWorkletNode(audio, "sparks-capture");
@@ -111,6 +126,7 @@ export class RealtimeSTT {
           ws.send(downsampleTo16k(event.data, audio.sampleRate).buffer as ArrayBuffer);
         };
         source.connect(node);
+        source.connect(analyser);
       } catch (error) {
         cleanup();
         finish(error);

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -51,7 +51,7 @@ class ActionLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reminder_id: Mapped[int] = mapped_column(ForeignKey("reminders.id"), nullable=False, index=True)
     state: Mapped[str] = mapped_column(String(20), nullable=False)
-    recorded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
     reason_en: Mapped[str | None] = mapped_column(Text, nullable=True)
     reason_es: Mapped[str | None] = mapped_column(Text, nullable=True)

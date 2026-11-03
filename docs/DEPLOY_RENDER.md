@@ -1,53 +1,66 @@
-# Demo hosting, part 2: web service on Render (morning of Nov 3)
+# Demo hosting, part 2: web service on Render
 
-Deadline: Nov 4, 8 PM CT. The Railway deploy is up but Meta's model API
-answers **404 to every request from Railway's network** (both regions, any
-key, IPv4 and IPv6), so chat and transcription cannot serve from there.
-Same requests from a laptop or GitHub Actions behave normally (401 with a
-bad key, 200 with the real key). Fix: move only the web service to Render.
-Postgres and the reminder scheduler stay on Railway (neither calls Meta).
+Live: https://yosubi-voice-companion.onrender.com
+(Service `srv-dbkpnmou01pc73e05aig`, region Oregon, plan free, branch `dev`.)
 
-## Owner steps (about 15 minutes, no CLI)
+Why Render: Meta's model API answers **404 to every request from
+Railway's network** (both regions, any key, IPv4 and IPv6), while the same
+requests from a laptop, GitHub Actions, or Render behave normally.
+Postgres and the reminder scheduler stay on Railway (neither calls Meta);
+only this web service moved. Verified 2026-11-03: fake key from Railway
+gets 404, from GitHub Actions gets 401, real key from Render gets 200.
 
-1. Railway dashboard → project `yosubi-voice-companion-demo` → Postgres
-   plugin → Settings → enable **Public Networking**. Copy the public
-   `DATABASE_URL` (it has the form `postgresql://...@...proxy.rlwy.net:port/railway`).
-2. Generate a fresh demo token on your own machine (do not reuse the
-   Railway one and do not paste secrets into chat):
-   `openssl rand -hex 24` (or 32 random letters/digits).
-3. Sign in to Render with GitHub, **New → Blueprint**, pick repo
-   `Yosubi-inc/yosubi-voice-companion` (branch `dev`, `render.yaml`).
-4. Fill the four `sync: false` values when Render asks:
-   - `DATABASE_URL`: the Railway public URL from step 1.
-   - `MODEL_API_KEY`: the Meta key (same one as local `.env`).
-   - `DEMO_API_TOKEN` and `NEXT_PUBLIC_DEMO_API_TOKEN`: the fresh token
-     from step 2 (same value twice).
-5. Deploy. First build takes ~10 minutes (Next.js export + pip install).
-   Health check is `/health`.
+## How it was created (API, not Blueprint)
 
-## Supervisor verify (after Render is green)
+Blueprint creation via API proved fussy, so the service was created
+directly: `POST /v1/services` (type `web_service`, runtime `docker`,
+dockerfilePath `./Dockerfile`, plan `free`, healthCheckPath `/health`,
+branch `dev`, autoDeploy yes). Two API gotchas, both verified:
 
-```powershell
-$base = "<render-web-url>"
-$tok = "<fresh-demo-token>"  # owner provides at that moment, never stored
-Invoke-WebRequest "$base/health" -UseBasicParsing
-Invoke-WebRequest "$base/" -UseBasicParsing          # exported page, ~5 KB
-Invoke-WebRequest "$base/demo/seed" -Method POST -Headers @{Authorization="Bearer $tok"} -UseBasicParsing
-curl.exe -s -m 90 -X POST "$base/chat" -H "Authorization: Bearer $tok" `
-  -H "Content-Type: application/json" -d "@C:\tmp\chat_en.json"
-```
+- `envVars` in the create call are **ignored**. Set them afterwards with
+  `PUT /v1/services/{id}/env-vars` (full replacement list).
+- The PUT does **not** trigger a deploy. Fire one with
+  `POST /v1/services/{id}/deploys`.
 
-Expect: `{"status":"ok"}`, the page, `{"created":true,...}`, and a real
-model reply. If `/chat` still 503s, read the backend log line
-`chat upstream failed:` — it names the exception class and Meta status.
+`render.yaml` is kept as documentation of the intended shape; the live
+service was not created from it.
+
+## Wiring
+
+- `DATABASE_URL`: Railway Postgres **public** proxy URL
+  (`shuttle.proxy.rlwy.net:44225`). Public Networking must stay enabled
+  on the Railway plugin. Password has no URL-unsafe characters (verified);
+  if Railway ever rotates it to one with `@:/?#%`, URL-encode user/password.
+- `MODEL_API_KEY`: Meta key (same value as local `.env`).
+- `DEMO_API_TOKEN` + `NEXT_PUBLIC_DEMO_API_TOKEN`: fresh Render-only token
+  (same value twice; the `NEXT_PUBLIC_` copy bakes into the static export
+  at Docker build time — verified present in the served JS bundle).
+- `SERVICE_ROLE=web`, `MODEL_ID=muse-spark-1.3`,
+  `MODEL_ID_SAFETY=muse-wonder-1.0`, `META_BASE_URL`, `META_REASONING_EFFORT=minimal`,
+  `DEMO_RESET_ENABLED=1`.
+
+Secrets live in gitignored `.env.render` (plus `RENDER_API_KEY` for API
+driving). Never commit, never paste into chat.
+
+## Operate
+
+- Deploy: push to `dev` (autoDeploy) or `POST /v1/services/{id}/deploys`.
+  Poll `GET .../deploys/{depId}` (single object, `.status`) to `live`.
+- Seed: `POST /demo/seed` (Bearer token). Same shared Postgres as
+  Railway, so the demo persona persists across hosts.
+- Spend: `GET /spend/summary` (Bearer token).
+- Logs: Render dashboard, or `GET /v1/services/{id}/logs`.
+- The old Railway backend still serves the page but its `/chat` 503s
+  (Meta 404). Delete it after judging, or keep as a spare static page.
 
 ## Notes
 
 - Render free web services sleep when idle; first request wakes in ~30 s.
-  Fine for judging; wake it before recording.
-- Scheduler stays on Railway, talking to Postgres over the private URL.
-  Schema creation runs on scheduler boot; nothing to redo.
-- The old Railway backend service can stay (it serves the page but its
-  `/chat` 503s) or be deleted after Render verifies. Decide at handoff.
-- `start.sh`/`Dockerfile` needed no changes: Render injects `$PORT` and
-  uses the image `CMD`, same as Railway.
+  Wake it before recording or judging.
+- Scheduler stays on Railway on the private URL. Seeded reminders show
+  `attempted → failed` with "No delivery service is configured": honest
+  failure reporting, per spec (no delivery channel exists while Twilio is
+  parked).
+- Speech-to-text uses Meta's file endpoint `POST /asr/transcribe`
+  (multipart `request` + `audio`, WAV 16/24 kHz mono); see
+  `backend/app/stt.py`. OpenAI-style `/audio/transcriptions` 404s.

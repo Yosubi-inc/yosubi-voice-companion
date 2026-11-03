@@ -1,12 +1,17 @@
 """Batch speech transcription with a prepaid spend reservation."""
 import io
+import json
 import math
 import os
 import struct
+import subprocess
+import tempfile
+from pathlib import Path
 import wave
 
 from mutagen.mp3 import MP3
 import httpx
+import imageio_ffmpeg
 from fastapi import HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
@@ -145,8 +150,26 @@ def transcribe(data, content_type, language):
     key = os.getenv("MODEL_API_KEY")
     if not key:
         raise HTTPException(503, detail=UNAVAILABLE)
-    extension, formats = FORMATS[content_type]
-    duration = audio_duration(data, formats)
+    if len(data) > MAX_BYTES:
+        raise HTTPException(413, detail=TOO_LARGE)
+    extension, _ = FORMATS[content_type]
+    try:
+        executable = imageio_ffmpeg.get_ffmpeg_exe()
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / ("input." + extension)
+            target = Path(directory) / "output.wav"
+            source.write_bytes(data)
+            subprocess.run(
+                [executable, "-nostdin", "-v", "error", "-i", str(source),
+                 "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-y", str(target)],
+                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60,
+            )
+            wav_data = target.read_bytes()
+    except (FileNotFoundError, OSError, RuntimeError):
+        raise HTTPException(503, detail=UNAVAILABLE) from None
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        raise HTTPException(400, detail=BAD_AUDIO) from None
+    duration = audio_duration(wav_data, {"wav"})
     # $0.18/hour = 50 microdollars per second. Round up before reserving.
     cost = math.ceil(duration * 50)
     try:
@@ -156,17 +179,18 @@ def transcribe(data, content_type, language):
     try:
         # Meta's IPv6 edge does not serve the model API (404); pin outbound to IPv4.
         with httpx.Client(timeout=60, transport=httpx.HTTPTransport(local_address="0.0.0.0")) as client:
-            response = client.post(os.getenv("META_BASE_URL", "https://api.meta.ai/v1").rstrip("/") + "/audio/transcriptions",
-                                   headers={"Authorization": f"Bearer {key}"},
-                                   data={"model": MODEL, "language": language, "response_format": "verbose_json"},
-                                   files={"file": ("audio." + extension, data, content_type)})
+            response = client.post(os.getenv("META_BASE_URL", "https://api.meta.ai/v1").rstrip("/") + "/asr/transcribe",
+                                   headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+                                   files={"request": (None, json.dumps({"model": MODEL, "audioEncoding": "WAV",
+                                           "mode": "PUSH_TO_TALK", "languageBias": ["English" if language == "en" else "Spanish"]}), "application/json"),
+                                          "audio": ("audio.wav", wav_data, "audio/wav")})
             response.raise_for_status()
             result = response.json()
-        transcript, detected = result["text"], result["language"]
-        if not isinstance(transcript, str) or not isinstance(detected, str) or not detected:
+        transcript = result["transcript"]
+        if not isinstance(transcript, str):
             raise ValueError("invalid transcription")
         spend.settle(get_engine(), reservation, cost, input_tokens=0, cached_tokens=0, output_tokens=0)
-        return {"transcript": transcript, "language": detected, "duration": float(duration)}
+        return {"transcript": transcript, "language": language, "duration": float(duration)}
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
         # Unknown outcomes retain their reservation for reconciliation.
         raise HTTPException(503, detail=UNAVAILABLE) from None

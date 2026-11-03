@@ -1,4 +1,10 @@
 import io
+import json
+import subprocess
+
+import imageio_ffmpeg
+from email.parser import BytesParser
+from email.policy import default
 import wave
 
 import httpx
@@ -36,10 +42,21 @@ def test_transcribe_and_record_audio_cost(setup_stt, monkeypatch):
     original_client = httpx.Client
     def handler(request):
         calls.append(request)
-        assert str(request.url) == "http://mock.invalid/v1/audio/transcriptions"
-        assert b"muse-voice-transcribe-1.0" in request.content
-        assert b'\r\n\r\nes\r\n' in request.content
-        return httpx.Response(200, json={"text": "Hola", "language": "es", "duration": 1})
+        assert str(request.url) == "http://mock.invalid/v1/asr/transcribe"
+        assert request.headers["accept"] == "application/json"
+        message = BytesParser(policy=default).parsebytes(
+            b"Content-Type: " + request.headers["content-type"].encode() + b"\r\n\r\n" + request.content
+        )
+        parts = {part.get_param("name", header="content-disposition"): part for part in message.iter_parts()}
+        assert set(parts) == {"request", "audio"}
+        assert parts["request"].get_content_type() == "application/json"
+        assert json.loads(parts["request"].get_payload(decode=True)) == {
+            "model": stt.MODEL, "audioEncoding": "WAV", "mode": "PUSH_TO_TALK", "languageBias": ["Spanish"]
+        }
+        assert parts["audio"].get_content_type() == "audio/wav"
+        with wave.open(io.BytesIO(parts["audio"].get_payload(decode=True)), "rb") as wav:
+            assert (wav.getframerate(), wav.getnchannels(), wav.getsampwidth()) == (16000, 1, 2)
+        return httpx.Response(200, json={"sessionId": "session", "transcript": "Hola", "audioDurationMs": 1000, "turns": []})
     monkeypatch.setattr(stt.httpx, "Client", lambda **kwargs: original_client(transport=httpx.MockTransport(handler)))
     response = TestClient(app).post("/stt?language=es", content=audio(), headers={"content-type": "audio/wav"})
     assert response.status_code == 200
@@ -98,3 +115,60 @@ def test_webm_duration_from_info_and_opus_blocks():
     cluster = element("1f43b675", element("e7", b"\x00") + block)
     without_duration = header + element("18538067", tracks + cluster)
     assert stt.audio_duration(without_duration, {"webm"}) == pytest.approx(0.02)
+
+
+@pytest.mark.parametrize("content_type,extension,codec", [
+    ("audio/webm", "webm", "libopus"),
+    ("audio/mpeg", "mp3", "libmp3lame"),
+])
+def test_browser_and_mp3_audio_are_transcoded(setup_stt, monkeypatch, tmp_path, content_type, extension, codec):
+    source = tmp_path / "source.wav"
+    encoded = tmp_path / ("source." + extension)
+    source.write_bytes(audio())
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-i", str(source),
+                    "-c:a", codec, "-y", str(encoded)], check=True)
+    original_run = subprocess.run
+    commands = []
+    def record_run(command, **kwargs):
+        commands.append(command)
+        return original_run(command, **kwargs)
+    monkeypatch.setattr(stt.subprocess, "run", record_run)
+    original_client = httpx.Client
+    def handler(request):
+        message = BytesParser(policy=default).parsebytes(
+            b"Content-Type: " + request.headers["content-type"].encode() + b"\r\n\r\n" + request.content
+        )
+        parts = {part.get_param("name", header="content-disposition"): part for part in message.iter_parts()}
+        assert json.loads(parts["request"].get_payload(decode=True))["languageBias"] == ["English"]
+        with wave.open(io.BytesIO(parts["audio"].get_payload(decode=True)), "rb") as wav:
+            assert (wav.getframerate(), wav.getnchannels(), wav.getsampwidth()) == (16000, 1, 2)
+        return httpx.Response(200, json={"transcript": "Hello"})
+    monkeypatch.setattr(stt.httpx, "Client", lambda **kwargs: original_client(transport=httpx.MockTransport(handler)))
+    response = TestClient(app).post("/stt?language=en", content=encoded.read_bytes(), headers={"content-type": content_type})
+    assert response.status_code == 200
+    assert response.json()["transcript"] == "Hello"
+    assert response.json()["language"] == "en"
+    assert len(commands) == 1
+    assert commands[0][0] == imageio_ffmpeg.get_ffmpeg_exe()
+    assert commands[0][commands[0].index("-ar") + 1] == "16000"
+    assert commands[0][commands[0].index("-ac") + 1] == "1"
+
+
+def test_missing_ffmpeg_is_bilingual_503(setup_stt, monkeypatch):
+    def unavailable():
+        raise RuntimeError("ffmpeg unavailable")
+    monkeypatch.setattr(stt.imageio_ffmpeg, "get_ffmpeg_exe", unavailable)
+    monkeypatch.setattr(stt.httpx, "Client", lambda **kwargs: pytest.fail("unexpected HTTP request"))
+    response = TestClient(app).post("/stt", content=audio(), headers={"content-type": "audio/wav"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == stt.UNAVAILABLE
+
+
+@pytest.mark.parametrize("status,body", [(500, {}), (200, {}), (200, {"transcript": None})])
+def test_meta_failures_are_bilingual_503(setup_stt, monkeypatch, status, body):
+    original_client = httpx.Client
+    monkeypatch.setattr(stt.httpx, "Client", lambda **kwargs: original_client(
+        transport=httpx.MockTransport(lambda request: httpx.Response(status, json=body))))
+    response = TestClient(app).post("/stt", content=audio(), headers={"content-type": "audio/wav"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == stt.UNAVAILABLE

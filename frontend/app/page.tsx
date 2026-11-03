@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import "./styles.css";
 import { transition, type State } from "../lib/conversation";
+import { cancelSpeech, speakReply } from "../lib/speak";
 import { detectLanguage, BackendAgent, BackendSTT, type ChatMessage, type TranscriptionSession } from "../lib/voice";
 
 export default function Home() {
@@ -26,7 +27,7 @@ export default function Home() {
     generation.current++;
     if (recordingTimer.current) clearInterval(recordingTimer.current);
     recordingTimer.current = null;
-    window.speechSynthesis.cancel();
+    cancelSpeech();
     session.current?.stop(); session.current = null;
     if (recorder.current?.state !== "inactive") recorder.current?.stop();
     recorder.current = null;
@@ -37,7 +38,7 @@ export default function Home() {
     generation.current++;
     if (recordingTimer.current) clearInterval(recordingTimer.current);
     recordingTimer.current = null;
-    window.speechSynthesis.cancel();
+    cancelSpeech();
     session.current?.stop();
     if (recorder.current?.state !== "inactive") recorder.current?.stop();
     stream.current?.getTracks().forEach(track => track.stop());
@@ -45,7 +46,7 @@ export default function Home() {
   const onFinal = async (text: string) => {
     if (!text.trim() || stateRef.current.phase === "idle") return;
     const turn = ++generation.current;
-    window.speechSynthesis.cancel();
+    cancelSpeech();
     const language = detectLanguage(text, stateRef.current.language);
     flushSync(() => update(transition(stateRef.current, { type: "transcript", language })));
     messages.current.push({ role: "user", content: text });
@@ -56,13 +57,9 @@ export default function Home() {
       const spoken = [result.text, result.actionConfirmation].filter(Boolean).join(" ");
       messages.current.push({ role: "assistant", content: spoken });
       setTranscript(previous => [...previous, { role: "assistant", text: result.text }, ...(result.actionConfirmation ? [{ role: "confirmation" as const, text: result.actionConfirmation }] : [])]);
-      const utterance = new SpeechSynthesisUtterance(spoken);
-      utterance.lang = result.language === "es" ? "es-ES" : "en-US";
-      utterance.onend = utterance.onerror = () => {
-        if (turn === generation.current) update(transition(stateRef.current, { type: "finished" }));
-      };
       update(transition(stateRef.current, { type: "reply" }));
-      window.speechSynthesis.speak(utterance);
+      await speakReply(spoken, result.language);
+      if (turn === generation.current) update(transition(stateRef.current, { type: "finished" }));
     } catch {
       if (turn === generation.current) { setError(true); update({ phase: "listening", language }); }
     }
@@ -92,27 +89,27 @@ export default function Home() {
   const status = state.phase === "idle" ? (es ? "Detenido" : "Stopped") : state.phase === "thinking" ? (es ? "Pensando" : "Thinking") : state.phase === "speaking" ? (es ? "Hablando" : "Speaking") : (es ? "Escuchando" : "Listening");
   return <main className="app">
     <header>
-      <p className="eyebrow">Yosubi</p>
-      <h1>{es ? "Tu compañero de voz" : "Your voice companion"}</h1>
-      <p>{es ? "Una conversación sencilla, a tu ritmo." : "A simple conversation, at your pace."}</p>
+
+      <h1>Sparks</h1>
+      <p className="tagline">{es ? "tu compañero comunitario" : "your community companion"}</p>
     </header>
     <section className="voice-panel" aria-label={es ? "Controles de voz" : "Voice controls"}>
       <div className="indicators">
         <p role="status"><span className={`status-dot ${state.phase}`} aria-hidden="true" />{status}</p>
         <p aria-label={es ? "Idioma" : "Language"}>{es ? "Idioma: ES" : "Language: EN"}</p>
       </div>
-      <button className="voice-button" type="button" onClick={() => state.phase === "idle" ? void start() : stop()}>{state.phase === "idle" ? "Start talking / Empezar a hablar" : "Stop talking / Dejar de hablar"}</button>
+      <button className={`voice-button ${state.phase === "idle" ? "talk" : "stop"}`} type="button" onClick={() => state.phase === "idle" ? void start() : stop()}>{state.phase === "idle" ? <><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" /><path d="M5 11a7 7 0 0 0 14 0" fill="none" stroke="currentColor" strokeWidth="2" /><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" /></svg><span>{es ? "Hablar" : "Talk"}</span></> : <><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg><span>{es ? "Alto" : "Stop"}</span></>}</button>
       {micError && <div className="error" role="alert"><p>{es ? "No se pudo usar el micrófono. Comprueba el permiso e inténtalo de nuevo." : "Could not use the microphone. Check its permission and try again."}</p><button type="button" onClick={() => void start()}>{es ? "Intentar de nuevo" : "Try again"}</button></div>}
       {error && <p className="error" role="alert">{es ? "No se pudo procesar la respuesta. Inténtalo de nuevo." : "Could not process the reply. Please try again."}</p>}
-      <p className="demo-note">{es ? "Habla o escribe lo que quieres decir. Si el servicio no está disponible, usa el texto de demostración." : "Speak or type what you want to say. If the service is unavailable, use the demo text."}</p>
+
       <form onSubmit={event => { event.preventDefault(); stt.current.submit(input); setInput(""); }}>
-        <label htmlFor="transcript">{es ? "Transcripción simulada" : "Fake transcript"}</label>
+        <label htmlFor="transcript">{es ? "Escribe aquí" : "Type here"}</label>
         <div className="input-row"><input id="transcript" value={input} onChange={event => setInput(event.target.value)} disabled={state.phase === "idle"} /><button type="submit" disabled={state.phase === "idle" || !input.trim()}>{es ? "Enviar" : "Send"}</button></div>
       </form>
     </section>
     <section className="conversation" aria-label={es ? "Conversación" : "Conversation"}>
       <h2>{es ? "Conversación" : "Conversation"}</h2>
-      {transcript.length === 0 ? <p>{es ? "Tu conversación aparecerá aquí." : "Your conversation will appear here."}</p> : <ol aria-live="polite">{transcript.map((line, index) => <li key={index} className={line.role}><strong>{line.role === "user" ? (es ? "Tú" : "You") : line.role === "confirmation" ? (es ? "Confirmación" : "Confirmation") : (es ? "Asistente" : "Assistant")}</strong><p>{line.text}</p></li>)}</ol>}
+      {transcript.length === 0 ? <p>{es ? "Tu conversación aparecerá aquí." : "Your conversation will appear here."}</p> : <ol aria-live="polite">{transcript.map((line, index) => <li key={index} className={line.role}><strong>{line.role === "user" ? (es ? "Tú" : "You") : line.role === "confirmation" ? (es ? "Confirmación" : "Confirmation") : "Sparks"}</strong><p>{line.text}</p></li>)}</ol>}
     </section>
   </main>;
 }

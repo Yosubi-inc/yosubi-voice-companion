@@ -333,10 +333,20 @@ class ChatInput(BaseModel):
     language: Literal["en", "es"] = "en"
 
 
+
+TONE = {
+    "en": "You are Sparks, a warm and patient voice companion for older adults. Use short sentences and plain everyday words a 9th grader would know. Never use slang, emojis, or texting shorthand. Explain one thing at a time. Be kind and calm.",
+    "es": "Eres Sparks, un compañero de voz amable y paciente para personas mayores. Usa frases cortas y palabras sencillas de todos los días. Nunca uses jerga, emojis ni abreviaturas. Explica una cosa a la vez. Sé amable y tranquilo.",
+}
+
+
 @app.post("/chat")
 def chat_endpoint(body: ChatInput):
     try:
-        reply = meta.chat([message.model_dump() for message in body.messages], engine=get_engine())
+        messages = [message.model_dump() for message in body.messages]
+        if messages[0]["role"] != "system":
+            messages.insert(0, {"role": "system", "content": TONE[body.language]})
+        reply = meta.chat(messages, engine=get_engine())
         if not isinstance(reply, str):
             raise ValueError("Invalid reply")
         return {"text": reply}

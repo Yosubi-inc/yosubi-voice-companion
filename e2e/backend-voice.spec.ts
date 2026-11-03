@@ -28,7 +28,7 @@ test("recorded audio and chat reach backend", async ({ page }) => {
     window.speechSynthesis.speak = () => {};
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /Start talking/ }).click();
+  await page.getByRole("button", { name: "Talk" }).click();
   await expect(page.getByText("Backend reply")).toBeVisible({ timeout: 10000 });
   expect(chatBody.messages.at(-1)).toEqual({ role: "user", content: "Hello" });
 });
@@ -42,8 +42,8 @@ test("unreachable backend uses fake response", async ({ page }) => {
     window.speechSynthesis.speak = () => {};
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /Start talking/ }).click();
-  await page.getByLabel("Fake transcript").fill("Hello");
+  await page.getByRole("button", { name: "Talk" }).click();
+  await page.getByLabel("Type here").fill("Hello");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("I am listening. How can I help?")).toBeVisible();
 });

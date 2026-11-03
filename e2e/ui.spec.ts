@@ -6,7 +6,7 @@ for (const width of [360, 1280]) {
       const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme });
       const page = await context.newPage();
       await page.goto("/");
-      const button = page.getByRole("button", { name: /Start talking/ });
+      const button = page.getByRole("button", { name: "Talk" });
       const box = await button.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.height).toBeGreaterThanOrEqual(100);
@@ -45,7 +45,7 @@ test("microphone failure can be retried", async ({ page }) => {
     } });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /Start talking/ }).click();
+  await page.getByRole("button", { name: "Talk" }).click();
   await expect(page.getByRole("region", { name: "Voice controls" }).getByRole("alert")).toContainText("microphone");
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByRole("region", { name: "Voice controls" }).getByRole("alert")).toHaveCount(0);

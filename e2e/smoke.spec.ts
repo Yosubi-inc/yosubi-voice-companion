@@ -18,40 +18,44 @@ test.beforeEach(async ({ page, context }) => {
     window.speechSynthesis.cancel = () => { (window as unknown as { cancelCount: number }).cancelCount++; };
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /Start talking/ }).click();
+  await page.getByRole("button", { name: "Talk" }).click();
   await expect(page.getByRole("status")).toHaveText("Listening");
 });
 
 test("conversation switches both ways and speaks action confirmation", async ({ page }) => {
-  await page.getByLabel("Fake transcript").fill("Hello");
+  await page.getByLabel("Type here").fill("Hello");
   await page.getByRole("button", { name: "Send" }).click();
-  await expect.poll(() => page.evaluate(() => (window as unknown as { speechCalls: { lang: string }[] }).speechCalls.length)).toBe(1);
-  await page.getByLabel("Fake transcript").fill("Hola, quiero español");
+  await expect.poll(() => page.evaluate(() => (window as unknown as { speechCalls: { lang: string }[] }).speechCalls.length)).toBe(2);
+  await page.getByLabel("Type here").fill("Hola, quiero español");
   await page.getByRole("button", { name: "Send" }).click();
-  await expect(page.getByLabel("Transcripción simulada")).toBeVisible();
-  await page.getByLabel("Transcripción simulada").fill("acción de prueba");
+  await expect(page.getByLabel("Escribe aquí")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { speechCalls: { lang: string }[] }).speechCalls.length)).toBe(4);
+  await page.getByLabel("Escribe aquí").fill("acción de prueba");
   await page.getByRole("button", { name: "Enviar" }).click();
   await expect(page.getByText(/Acción de prueba completada/)).toBeVisible();
-  await page.getByLabel("Transcripción simulada").fill("English please");
+  await expect.poll(() => page.evaluate(() => (window as unknown as { speechCalls: { lang: string }[] }).speechCalls.length)).toBe(7);
+  await page.getByLabel("Escribe aquí").fill("English please");
   await page.getByRole("button", { name: "Enviar" }).click();
-  await expect(page.getByLabel("Fake transcript")).toBeVisible();
-  await page.getByLabel("Fake transcript").fill("demo action");
+  await expect(page.getByLabel("Type here")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { speechCalls: { lang: string }[] }).speechCalls.length)).toBe(9);
+  await page.getByLabel("Type here").fill("demo action");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText(/Demo action completed/)).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { speechCalls: { lang: string }[] }).speechCalls.length)).toBe(12);
   const calls = await page.evaluate(() => (window as unknown as { speechCalls: { text: string; lang: string }[] }).speechCalls);
-  expect(calls.map(call => call.lang)).toEqual(["en-US", "es-ES", "es-ES", "en-US", "en-US"]);
-  expect(calls[2].text).toContain("Acción de prueba completada");
-  expect(calls[4].text).toContain("Demo action completed");
-  await page.getByRole("button", { name: /Stop talking/ }).click();
+  expect(calls.map(call => call.lang)).toEqual(["en-US", "en-US", "es-ES", "es-ES", "es-ES", "es-ES", "es-ES", "en-US", "en-US", "en-US", "en-US", "en-US"]);
+  expect(calls[5].text).toContain("Acción de prueba completada");
+  expect(calls[10].text).toContain("Demo action completed");
+  await page.getByRole("button", { name: "Stop" }).click();
   await expect(page.getByRole("status")).toHaveText("Stopped");
 });
 
 test("new input interrupts speech and is processed", async ({ page }) => {
-  await page.getByLabel("Fake transcript").fill("Hello");
+  await page.getByLabel("Type here").fill("Hello");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByRole("status")).toHaveText("Speaking");
   const before = await page.evaluate(() => (window as unknown as { cancelCount: number }).cancelCount);
-  await page.getByLabel("Fake transcript").fill("Hola");
+  await page.getByLabel("Type here").fill("Hola");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText(/Te escucho/)).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { cancelCount: number }).cancelCount)).toBeGreaterThan(before);
@@ -59,7 +63,7 @@ test("new input interrupts speech and is processed", async ({ page }) => {
 });
 
 test("transcript, status and language remain visible", async ({ page }) => {
-  await page.getByLabel("Fake transcript").fill("demo action");
+  await page.getByLabel("Type here").fill("demo action");
   await page.getByRole("button", { name: "Send" }).click();
   const conversation = page.getByRole("region", { name: "Conversation" });
   await expect(conversation.getByText("demo action", { exact: true })).toBeVisible();
@@ -67,7 +71,7 @@ test("transcript, status and language remain visible", async ({ page }) => {
   await expect(conversation.getByText(/Demo action completed/)).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("Speaking");
   await expect(page.getByLabel("Language")).toHaveText("Language: EN");
-  await page.getByLabel("Fake transcript").fill("Hola");
+  await page.getByLabel("Type here").fill("Hola");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByLabel("Idioma")).toHaveText("Idioma: ES");
 });
@@ -83,7 +87,7 @@ test("status moves through thinking and back to listening", async ({ page }) => 
     })).observe(status, { subtree: true, characterData: true, characterDataOldValue: true, childList: true });
     window.speechSynthesis.speak = utterance => { setTimeout(() => utterance.dispatchEvent(new Event("end")), 100); };
   });
-  await page.getByLabel("Fake transcript").fill("Hello");
+  await page.getByLabel("Type here").fill("Hello");
   await page.getByRole("button", { name: "Send" }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { statusChanges: string[] }).statusChanges)).toContain("Thinking");
   await expect(page.getByRole("status")).toHaveText("Listening");

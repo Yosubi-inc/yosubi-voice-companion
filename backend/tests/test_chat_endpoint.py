@@ -21,7 +21,11 @@ def test_chat_relays_messages_and_requires_demo_auth(monkeypatch):
     response = client.post("/chat", json=payload, headers={"Authorization": "Bearer " + credential})
     assert response.status_code == 200
     assert response.json() == {"text": "Hola"}
-    assert received == [(payload["messages"], {"engine": engine})]
+    assert len(received) == 1 and received[0][1] == {"engine": engine}
+    sent = received[0][0]
+    assert sent[0]["role"] == "system" and "Sparks" in sent[0]["content"]
+    assert "jerga" in sent[0]["content"]
+    assert sent[1:] == payload["messages"]
 
 
 @pytest.mark.parametrize("payload", [

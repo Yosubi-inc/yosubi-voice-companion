@@ -6,6 +6,7 @@ RUN npm ci
 COPY frontend/ ./
 ARG NEXT_PUBLIC_DEMO_API_TOKEN=""
 ARG NEXT_PUBLIC_DEMO_OFFLINE="0"
+ARG NEXT_PUBLIC_TTS_URL=""
 RUN npm run build
 
 FROM python:3.12-slim

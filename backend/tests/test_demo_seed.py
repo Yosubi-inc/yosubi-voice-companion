@@ -78,6 +78,25 @@ def test_reset_gating_and_scoped_deletion(demo, monkeypatch):
     assert client.post("/demo/reset").status_code == 200
 
 
+def test_seed_gating_and_idempotent_reseed(demo, monkeypatch):
+    client, engine = demo
+    assert client.post("/demo/seed").status_code == 403
+    monkeypatch.setenv("DEMO_RESET_ENABLED", "1")
+    token = secrets.token_urlsafe(24)
+    monkeypatch.setenv("DEMO_API_TOKEN", token)
+    assert client.post("/demo/seed").status_code == 401
+    headers = {"Authorization": "Bearer " + token}
+    assert client.post("/demo/seed", headers=headers).json()["created"] is False
+    assert client.post("/demo/reset", headers=headers).status_code == 200
+    with Session(engine) as db:
+        assert db.get(Profile, PROFILE_ID) is None
+    response = client.post("/demo/seed", headers=headers)
+    assert response.status_code == 200 and response.json()["created"] is True
+    with Session(engine) as db:
+        assert db.get(Profile, PROFILE_ID) is not None
+        assert db.get(DemoSeed, PROFILE_ID) is not None
+
+
 def test_script_runs_twice(tmp_path):
     env = os.environ.copy()
     env["DATABASE_URL"] = f"sqlite:///{tmp_path / 'script.db'}"

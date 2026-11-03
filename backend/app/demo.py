@@ -12,8 +12,7 @@ from app.models import ActionLog, CircleActivity, Consent, DemoSeed, EscalationR
 router = APIRouter()
 
 
-@router.post("/demo/reset")
-def reset_demo(request: Request, db: Session = Depends(get_db)):
+def _require_demo_auth(request: Request):
     if os.getenv("DEMO_RESET_ENABLED") != "1":
         raise HTTPException(403, detail={"en": "Demo reset is disabled.", "es": "El reinicio de demostración está desactivado."})
     token = os.getenv("DEMO_API_TOKEN")
@@ -21,6 +20,21 @@ def reset_demo(request: Request, db: Session = Depends(get_db)):
         scheme, separator, credential = request.headers.get("authorization", "").partition(" ")
         if not separator or scheme.lower() != "bearer" or not hmac.compare_digest(credential.encode(), token.encode()):
             raise HTTPException(401, detail={"en": "Authentication required.", "es": "Se requiere autenticación."}, headers={"WWW-Authenticate": "Bearer"})
+
+
+@router.post("/demo/seed")
+def seed_demo_endpoint(request: Request, db: Session = Depends(get_db)):
+    _require_demo_auth(request)
+    from seed_demo import PROFILE_ID, seed_session
+    created = seed_session(db)
+    return {"created": created, "profile_id": PROFILE_ID,
+            "en": "Demo data seeded." if created else "Demo data already present.",
+            "es": "Datos de demostración cargados." if created else "Los datos de demostración ya existen."}
+
+
+@router.post("/demo/reset")
+def reset_demo(request: Request, db: Session = Depends(get_db)):
+    _require_demo_auth(request)
     from seed_demo import PROFILE_ID
     marker = db.get(DemoSeed, PROFILE_ID)
     if marker:

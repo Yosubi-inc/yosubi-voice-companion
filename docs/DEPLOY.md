@@ -1,68 +1,51 @@
-# Demo deployment preparation
+# Demo deployment runbook (Railway)
 
-Do not deploy this revision yet. The API has shared demo-token authentication
-but no individual identity or ownership checks. The
-web interface uses simulated speech and agent responses. It does not connect to
-the backend or the Meta Model API. The phone flow also uses a demo agent.
-The required Dockerfile and Railway service configuration are not supplied in
-this revision. Resolve these gaps before asking the owner to approve a deploy.
-Use no production Yosubi customer data.
+Target: public demo for hackathon judging (Nov 4-8). Three services plus
+managed Postgres, all from this repo's `dev` branch at the approved commit.
 
-## Environment variables
+Services:
 
-Set secrets in Railway's service variables, never in source files or logs.
-The current code reads the following variables:
+- `backend`: Dockerfile at repo root. Start `python -m app`.
+  Health check `/health`. Needs `HOST=0.0.0.0`, `PORT` from platform.
+- `frontend`: `frontend/` directory, Nixpacks builder.
+  Start `npx next start --hostname 0.0.0.0 -p $PORT`. Health check `/`.
+  `NEXT_PUBLIC_DEMO_API_TOKEN` is baked at build time.
+- `scheduler`: Dockerfile at repo root. Start `python -m app.scheduler`.
+  No health check; it loops `run_due` every second.
+- `postgres`: Railway managed plugin. Reference its `DATABASE_URL`.
 
-| Variable | Service | Purpose |
+Environment variables (set in Railway service variables, never in files):
+
+| Variable | Services | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | backend and scheduler | Required PostgreSQL connection URL. Use the managed database service reference. |
-| `DEMO_API_TOKEN` | backend | Shared bearer token for demo API routes; unset or empty leaves them open with a startup warning. |
-| `NEXT_PUBLIC_DEMO_API_TOKEN` | frontend build | Same demo token, included by the API request helper when set. Public in browser assets; use demo data only. |
-| `HOST` | backend | Bind address for `python -m app`. Defaults to `127.0.0.1`; set `0.0.0.0` explicitly only for the hosted container. |
-| `PORT` | backend | Port for `python -m app`; defaults to `8000`. Use the port assigned by the hosting platform. |
-| `TWILIO_AUTH_TOKEN` | backend and scheduler | Webhook signature verification; also needed for test calls. |
-| `TWILIO_ACCOUNT_SID` | scheduler | Twilio test account identifier for test calls. |
-| `TWILIO_FROM_NUMBER` | scheduler | Test call origin number. |
-| `PHONE_TEST_DESTINATION` | scheduler | Single test call destination. |
-| `PHONE_WEBHOOK_BASE_URL` | backend and scheduler | Exact externally configured webhook origin, without a trailing slash or path. |
-| `PHONE_TEST_MODE` | scheduler | Set to `1` to enable test calls; otherwise delivery fails safely. |
-| `PHONE_LANGUAGE` | scheduler | Set to `es` for Spanish calls; defaults to English. |
-| `PYTHONPATH` | backend and scheduler | Set to `backend` when running from the repository root. |
+| `DATABASE_URL` | backend, scheduler | Managed Postgres reference. |
+| `MODEL_API_KEY` | backend | Meta Model API key. Server-side only. |
+| `MODEL_ID` | backend | `muse-spark-1.3` (conversation). |
+| `MODEL_ID_SAFETY` | backend | `muse-wonder-1.0` (safety second opinion). |
+| `META_REASONING_EFFORT` | backend | `minimal` (voice latency floor). |
+| `META_BASE_URL` | backend | `https://api.meta.ai/v1`. |
+| `DEMO_API_TOKEN` | backend | Shared demo Bearer [REDACTED] Set for the public demo. |
+| `NEXT_PUBLIC_DEMO_API_TOKEN` | frontend | Same token, build time. |
+| `DEMO_RESET_ENABLED` | backend | `1` so judges can reseed; token-gated. |
+| `HOST` / `PORT` | backend | `0.0.0.0` / platform port. |
+| `PYTHONPATH` | backend, scheduler | `backend`. |
+| Twilio vars | backend, scheduler | Only when the phone step is approved. |
 
-`MODEL_API_KEY` is required by the target specification, but the current app
-does not read it or make model calls. Do not claim model integration works by
-setting it. The current simulated frontend does not yet call the backend. Configure
-the frontend token at build time. `/health` stays open and `/phone/*` continues
-to require Twilio signatures.
+Known limits: API auth is a shared demo token (no per-user identity).
+Demo data only; nothing sensitive. Trial Twilio (when approved) plays a
+trial prompt and only verified numbers can call.
 
-## Owner-approved deployment sequence
+## Owner-approved sequence
 
-1. Complete and review authentication and ownership checks, the container and
-   service configuration, and the missing integrations. Confirm that health
-   checks and a fresh demo database are configured. Do not use `create_all` to
-   update an existing database; it only creates missing tables.
-2. **Owner approval required:** approve the Railway project, managed Postgres,
-   any charges, public domains, and the exact deployment revision.
-3. After approval, create the Railway project and managed Postgres. Create the
-   backend and frontend services from the approved revision. Configure each
-   service's build, start command, and health check using the reviewed service
-   configuration. A scheduler is a separate process and is not started by the
-   API; provision one only if reminder execution is included in the approval.
-4. **Owner approval required:** approve each environment variable and domain
-   change. Set the applicable variables above in the appropriate Railway
-   services. Reference the managed Postgres URL instead of copying credentials
-   into the repository. Supply `MODEL_API_KEY` only when its integration exists.
-5. **Owner approval required:** approve schema creation on the fresh demo
-   database. Run `python -m app.database` in the backend service with
-   `PYTHONPATH=backend` and `DATABASE_URL` set. Never run this against production
-   Yosubi customer data.
-6. **Owner approval required:** approve the deploy. Deploy the approved revision,
-   then check the backend `/health` endpoint and the frontend over their approved
-   URLs. A healthy endpoint does not prove database connectivity.
-7. **Owner approval required:** approve any Twilio number, billing, webhook
-   changes, and live calls separately. Configure the approved inbound webhook
-   to `<backend-origin>/phone/inbound` and verify the signature setup. Test only
-   with owner-approved test accounts, numbers, and data.
-
-The exact service-specific build and start settings depend on the missing
-container and Railway configuration; do not deploy until those are reviewed.
+1. **Approval:** Railway project + managed Postgres + any charges +
+   public domains + exact revision to deploy.
+2. Create the project, Postgres plugin, and the three services from the
+   approved revision. Set build/start/healthcheck per `railway.toml` files.
+3. **Approval:** every env var above. Set them per service.
+4. **Approval:** schema creation on the fresh demo database.
+   Run `python -m app.database` once in the backend service.
+   (`create_all` only creates missing tables; never run on real data.)
+5. **Approval:** deploy. Then verify `/health`, `/ready`, and the frontend
+   URL. Seed via `POST /demo/reset` + seed, or the documented seed flow.
+6. **Separately:** Twilio number, webhooks, billing, live calls.
+   Webhook target: `<backend-origin>/phone/inbound`.

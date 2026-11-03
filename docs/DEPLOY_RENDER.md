@@ -54,7 +54,13 @@ driving). Never commit, never paste into chat.
 - Logs: Render dashboard, or `GET /v1/services/{id}/logs`.
 - The old Railway backend was deleted 2026-11-03 (its `/chat` 503'd on
   the Meta 404, and its demo token touched session logs). Railway now
-  holds only Postgres + scheduler.
+  holds Postgres + scheduler + the `tts` voice service.
+- Voice (`tts` service, `SERVICE_ROLE=tts`): same image, serves Meta MMS
+  speech at `POST /tts` (Bearer demo token, same value as Render's).
+  Public URL `https://tts-production-17a6.up.railway.app`, baked into the
+  web export as `NEXT_PUBLIC_TTS_URL`. No Meta egress, so the Railway 404
+  does not apply. First request loads the model (~15 s); repeats are
+  cached in memory.
 
 ## Notes
 

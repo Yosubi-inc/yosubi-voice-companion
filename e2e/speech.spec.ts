@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { cancelSpeech, speakReply, toSpokenText } from "../frontend/lib/speak";
-import { downsampleTo16k, voiceStreamUrl } from "../frontend/lib/realtime";
+import { downsampleTo16k, isDuplicateFinal, voiceStreamUrl } from "../frontend/lib/realtime";
 
 test("cleans Markdown and emoji for speech", () => {
   expect(toSpokenText("## Hello **friend**\n- Visit [our site](https://example.invalid)\n2. _Welcome_"))
@@ -13,6 +13,15 @@ test("downsamples PCM to 16 kHz mono", () => {
   expect(Array.from(downsampleTo16k(input, 16000))).toEqual([0, 16383, 32767, 32767, 16383, 0]);
   expect(downsampleTo16k(new Float32Array(480), 48000)).toHaveLength(160);
   expect(downsampleTo16k(new Float32Array([2, -2]), 16000)).toEqual(new Int16Array([32767, -32767]));
+});
+
+test("drops repeated finals inside the window only", () => {
+  expect(isDuplicateFinal("Hello!", "hello", 500)).toBe(true);
+  expect(isDuplicateFinal("¿Hablas español? Necesito ayuda.", "hablas espanol necesito ayuda", 900)).toBe(false);
+  expect(isDuplicateFinal("¿Hablas español? Necesito ayuda.", "Hablas español necesito ayuda", 900)).toBe(true);
+  expect(isDuplicateFinal("Hello!", "hello", 5000)).toBe(false);
+  expect(isDuplicateFinal("Something else", "hello", 500)).toBe(false);
+  expect(isDuplicateFinal("   ", "", 100)).toBe(false);
 });
 
 test("builds the voice stream URL from the page origin", () => {

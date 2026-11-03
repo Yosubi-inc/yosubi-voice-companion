@@ -49,6 +49,13 @@ function setMicAnalyser(node: AnalyserNode | null): void {
   micAnalyser = node;
 }
 
+export function isDuplicateFinal(text: string, previous: string, elapsedMs: number, windowMs = 4000): boolean {
+  if (elapsedMs >= windowMs) return false;
+  const normalize = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const current = normalize(text);
+  return current !== "" && current === normalize(previous);
+}
+
 export interface RealtimeOptions {
   language: () => Language;
   stream: () => MediaStream | null;
@@ -61,6 +68,8 @@ export class RealtimeSTT {
   start(onFinal: (text: string) => void): TranscriptionSession & { ready: Promise<void> } {
     let socket: WebSocket | null = null;
     let context: AudioContext | null = null;
+    let lastFinal = "";
+    let lastFinalAt = 0;
     let stopped = false;
     let settled = false;
     let resolveReady!: () => void;
@@ -108,7 +117,14 @@ export class RealtimeSTT {
           try { message = JSON.parse(event.data); } catch { return; }
           if (message.type === "ready") { finish(); return; }
           if (message.type === "transcript" && message.transcript) this.options.onPartial?.(message.transcript);
-          if (message.type === "speechComplete" && message.transcript && !stopped) onFinal(message.transcript);
+          if (message.type === "speechComplete" && message.transcript && !stopped) {
+            const now = Date.now();
+            if (!isDuplicateFinal(message.transcript, lastFinal, now - lastFinalAt)) {
+              lastFinal = message.transcript;
+              lastFinalAt = now;
+              onFinal(message.transcript);
+            }
+          }
           if (message.type === "error") finish(new Error("upstream"));
         };
         await ready;

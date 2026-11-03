@@ -40,7 +40,7 @@ def _usage(usage, model):
     return cost, inputs, cached, outputs
 
 
-def chat(messages, *, engine, temperature=0.7, stream=False, client=None, reasoning_effort=None):
+def chat(messages, *, engine, temperature=0.7, stream=False, client=None, reasoning_effort=None, model=None):
     """Send ordered messages; put stable system instructions first for caching.
 
     For streams, iteration yields text fragments. Usage is settled at the end;
@@ -49,7 +49,7 @@ def chat(messages, *, engine, temperature=0.7, stream=False, client=None, reason
     key = os.getenv("MODEL_API_KEY")
     if not key:
         raise HTTPException(503, detail=_UNAVAILABLE)
-    model = os.getenv("MODEL_ID", "muse-spark-1.3")
+    model = model or os.getenv("MODEL_ID", "muse-spark-1.3")
     in_rate, _, out_rate = _rates(model)
     if not isinstance(messages, list) or not all(
         isinstance(m, dict) and set(m) == {"role", "content"}

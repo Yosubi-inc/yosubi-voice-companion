@@ -43,7 +43,7 @@ The API provides `POST /tasks`, `GET /tasks`, `PATCH /tasks/{id}`, `DELETE /task
 
 ## Safety API
 
-`POST /safety/assess` accepts `text` and `language` (`en` or `es`). It returns local scam and emergency guidance; no model call is made. It offers direct emergency or trusted-contact escalation, but does not call or message anyone. Heuristics cannot identify every scam or emergency.
+`POST /safety/assess` accepts `text` and `language` (`en` or `es`). Local heuristics check every report. When they flag a possible scam and `MODEL_API_KEY` is set, the endpoint requests a second opinion using `MODEL_ID_SAFETY` (default `muse-wonder-1.0`, temperature 0) through the spend ledger. The response includes the model verdict, signals, and guidance alongside the local warning. Without a key, guidance remains local. Model errors and spend-limit refusals are returned to the caller. It offers direct emergency or trusted-contact escalation, but does not call or message anyone. Heuristics cannot identify every scam or emergency.
 
 Trusted contacts and their `receive_escalation` or `save_incident` grants are managed under `/safety/profiles/{profile_id}`. Each change and sensitive action requires current profile consent and explicit action consent; a contact action also requires an active grant. Incident summaries are saved only through the consent-gated endpoint. Payments, purchases, account changes, and protected-information sharing are not supported.
 

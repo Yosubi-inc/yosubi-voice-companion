@@ -12,7 +12,8 @@ from fastapi import HTTPException
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    monkeypatch.delenv("MODEL_API_KEY", raising=False)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     def override():

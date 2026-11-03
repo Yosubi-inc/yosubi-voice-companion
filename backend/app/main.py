@@ -340,7 +340,9 @@ def chat_endpoint(body: ChatInput):
         if not isinstance(reply, str):
             raise ValueError("Invalid reply")
         return {"text": reply}
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:
+        upstream = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+        logging.getLogger(__name__).error("chat upstream failed: %s upstream_status=%s", type(exc).__name__, upstream)
         raise HTTPException(503, detail={"en": "The assistant is unavailable right now.", "es": "El asistente no está disponible en este momento."}) from None
 
 
